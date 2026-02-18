@@ -48,84 +48,160 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Initialize SAML strategy if enabled
-  const emailSettings = await storage.getEmailSettings();
-  if (emailSettings?.enableSso && emailSettings.samlEntryPoint) {
-    console.log("[SAML] Configuring SAML Strategy with Skillmine...");
-    const samlStrategy = new SamlStrategy(
-      {
-        path: "/api/auth/saml/callback",
-        entryPoint: emailSettings.samlEntryPoint,
-        issuer: emailSettings.samlIssuer || "Skillmine",
-        cert: emailSettings.samlCert || "",
-        callbackUrl: "/api/auth/saml/callback",
-      },
-      (profile: any, done: any) => {
-        const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
-        if (!email) {
-          return done(new Error("Email not found in SAML profile"));
-        }
+  // Helper to ensure SAML strategy is configured with latest settings
+  const configureSamlStrategy = async (req?: any) => {
+    const settings = await storage.getEmailSettings();
+    if (settings?.enableSso && settings.samlEntryPoint) {
+      const baseUrl = req ? `${req.protocol}://${req.get('host')}` : '';
+      const callbackUrl = `${baseUrl}/api/auth/saml/callback`;
+      const logoutCallbackUrl = `${baseUrl}/api/auth/saml/logout/callback`;
 
-        (async () => {
-          try {
-            let user = await storage.getUserByEmail(email);
-            if (!user) {
-              console.log(`[SAML] User ${email} not found, creating new account...`);
-              const { v4: uuidv4 } = await import("uuid");
-              user = await storage.createUser({
-                id: uuidv4(),
-                email: email,
-                firstName: profile.firstName || profile.givenName || "SSO",
-                lastName: profile.lastName || profile.surname || "User",
-                role: "user",
-                passwordHash: "SSO_AUTH_ONLY",
-                isActivated: true,
-                mustChangePassword: false,
-              });
-            }
-
-            return done(null, user);
-          } catch (err) {
-            return done(err);
+      console.log(`[SAML] Refreshing SAML Strategy configuration (Base: ${baseUrl || 'relative'})...`);
+      
+      let idpCert = settings.samlCert || "";
+      if (idpCert && !idpCert.includes("-----BEGIN CERTIFICATE-----")) {
+        console.warn("[SAML] Certificate missing BEGIN header, attempting to wrap...");
+        idpCert = `-----BEGIN CERTIFICATE-----\n${idpCert}\n-----END CERTIFICATE-----`;
+      }
+      
+      const samlStrategy = new SamlStrategy(
+        {
+          entryPoint: settings.samlEntryPoint,
+          issuer: settings.samlIssuer || "Skillmine",
+          idpIssuer: settings.samlIdpIssuer || undefined,
+          idpCert: idpCert,
+          callbackUrl,
+          logoutUrl: settings.samlLogoutUrl || "",
+          logoutCallbackUrl,
+          wantAssertionsSigned: true,
+          wantAuthnResponseSigned: false, // Most IdPs only sign assertions
+        },
+        (profile: any, done: any) => {
+          const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
+          if (!email) {
+            return done(new Error("Email not found in SAML profile"));
           }
-        })();
-      }
-    );
-    passport.use("saml", samlStrategy as any);
 
-    // SAML routes
-    app.get("/api/auth/saml/login", passport.authenticate("saml"));
-    
-    app.post(
-      "/api/auth/saml/callback",
-      passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
-      async (req: any, res) => {
-        // Create session compatible with existing auth
-        req.session.user = {
-          id: req.user.id,
-          email: req.user.email,
-          role: req.user.role,
-        };
-        
-        await storage.createAuditLog({
-          userId: req.user.id,
-          action: 'login',
-          resourceType: 'user',
-          resourceId: req.user.id,
-          details: { email: req.user.email, method: 'saml' },
-        });
+          (async () => {
+            try {
+              let user = await storage.getUserByEmail(email);
+              if (!user) {
+                if (!settings?.samlJitEnabled) {
+                  return done(null, false, { message: "User not found in application. JIT provisioning is disabled." });
+                }
 
-        res.redirect("/");
-      }
-    );
+                console.log(`[SAML] User ${email} not found, creating new account (JIT enabled)...`);
+                const { v4: uuidv4 } = await import("uuid");
+                user = await storage.createUser({
+                  id: uuidv4(),
+                  email: email,
+                  firstName: profile.firstName || profile.givenName || "SSO",
+                  lastName: profile.lastName || profile.surname || "User",
+                  role: "user",
+                  passwordHash: "SSO_AUTH_ONLY",
+                  isActivated: true,
+                  mustChangePassword: false,
+                });
+              }
 
-    app.get("/api/auth/saml/metadata", (req, res) => {
-      res.type("application/xml");
-      res.status(200).send(
-        samlStrategy.generateServiceProviderMetadata(emailSettings.samlCert || "")
+              return done(null, user);
+            } catch (err) {
+              return done(err);
+            }
+          })();
+        },
+        (profile: any, done: any) => {
+          return done(null, profile);
+        }
       );
+      passport.use("saml", samlStrategy as any);
+      return samlStrategy;
+    }
+    return null;
+  };
+
+  // Pre-initialize if possible (don't await here to ensure routes are registered synchronously)
+  configureSamlStrategy().catch(err => console.error("[SAML] Initialization error:", err));
+
+  // SAML routes (Registered statically to avoid 404s)
+  console.log("[SAML] Registering static SAML routes...");
+  
+  app.get("/api/auth/saml/login", async (req, res, next) => {
+    console.log("[SAML] Hit login route");
+    const strategy = await configureSamlStrategy(req);
+    if (!strategy) {
+      return res.status(400).json({ message: "SAML is not configured or enabled" });
+    }
+    passport.authenticate("saml")(req, res, next);
+  });
+  
+  app.post(
+    "/api/auth/saml/callback",
+    async (req, res, next) => {
+      const strategy = await configureSamlStrategy(req);
+      if (!strategy) {
+        return res.status(400).json({ message: "SAML is not configured or enabled" });
+      }
+      next();
+    },
+    passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
+    async (req: any, res) => {
+      // Create session compatible with existing auth
+      req.session.user = {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+      };
+      
+      await storage.createAuditLog({
+        userId: req.user.id,
+        action: 'login',
+        resourceType: 'user',
+        resourceId: req.user.id,
+        details: { email: req.user.email, method: 'saml' },
+      });
+
+      res.redirect("/");
+    }
+  );
+
+  app.get("/api/auth/saml/metadata", async (req, res) => {
+    console.log(`[SAML] Hit metadata route: ${req.method} ${req.url}`);
+    const strategy = await configureSamlStrategy(req);
+    if (!strategy) {
+      return res.status(400).json({ message: "SAML is not configured or enabled" });
+    }
+    const settings = await storage.getEmailSettings();
+    res.type("application/xml");
+    res.status(200).send(
+      strategy.generateServiceProviderMetadata(settings?.samlCert || "")
+    );
+  });
+
+  // SAML Logout routes
+  app.get("/api/auth/saml/logout", async (req: any, res) => {
+    const strategy = await configureSamlStrategy(req);
+    const settings = await storage.getEmailSettings();
+    if (strategy && settings?.samlLogoutUrl) {
+      strategy.logout(req, (err, url) => {
+        if (err) return res.status(500).json({ message: "Logout failed" });
+        res.redirect(url || "/login");
+      });
+    } else {
+      req.logout(() => res.json({ message: "Logged out locally" }));
+    }
+  });
+
+  app.all("/api/auth/saml/logout/callback", (req, res) => {
+    req.session.destroy(() => {
+      res.redirect("/login");
     });
-  }
+  });
+
+  // Sanity check route
+  app.get("/api/sanity-check", (req, res) => {
+    res.json({ status: "ok", time: new Date().toISOString() });
+  });
 
   // Custom login endpoint
   app.post('/api/auth/login', async (req, res) => {
