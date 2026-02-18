@@ -92,6 +92,9 @@ export async function setupAuth(app: Express) {
             return done(err);
           }
         })();
+      },
+      (profile: any, done: any) => {
+        done(null, profile);
       }
     );
     passport.use("saml", samlStrategy as any);
