@@ -292,8 +292,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add more complex logic here if "User base restriction" implies specific department/location rules
       }
 
+      const bookingParticipants = Array.isArray(req.body.participants) ? [...req.body.participants] : [];
+      const userEmail = req.user.email;
+      if (userEmail && !bookingParticipants.some(p => p.toLowerCase().trim() === userEmail.toLowerCase().trim())) {
+        bookingParticipants.push(userEmail);
+      }
+
       const bookingData = insertBookingSchema.parse({
         ...req.body,
+        participants: bookingParticipants,
         userId: req.user.id,
       });
       
