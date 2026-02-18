@@ -488,6 +488,7 @@ export class DatabaseStorage implements IStorage {
         .update(emailSettings)
         .set({ 
           ...settings, 
+          samlServiceProvider: settings.samlServiceProvider || 'Skillmine',
           updatedAt: new Date() 
         })
         .where(eq(emailSettings.id, existing.id))
@@ -497,7 +498,10 @@ export class DatabaseStorage implements IStorage {
       // Insert new record
       const [result] = await db
         .insert(emailSettings)
-        .values(settings)
+        .values({
+          ...settings,
+          samlServiceProvider: settings.samlServiceProvider || 'Skillmine'
+        })
         .returning();
       return result;
     }

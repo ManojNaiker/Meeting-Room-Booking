@@ -31,6 +31,7 @@ import {
   Sun,
   Moon,
   Mail,
+  ShieldCheck,
   BarChart3,
   User,
   Lock,
@@ -169,6 +170,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'User Management', href: '/users', icon: Users },
     { name: 'Room Management', href: '/rooms', icon: DoorOpen },
     { name: 'Email Settings', href: '/email-settings', icon: Mail },
+    { name: 'SSO Settings', href: '/sso-settings', icon: ShieldCheck },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Audit Log', href: '/audit', icon: ClipboardList },
   ];

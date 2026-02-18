@@ -16,6 +16,7 @@ import UserManagement from "@/components/UserManagement";
 import RoomManagement from "@/components/RoomManagement";
 import AuditLog from "@/components/AuditLog";
 import EmailSettings from "@/components/EmailSettings";
+import SsoSettings from "@/components/SsoSettings";
 import Analytics from "@/components/Analytics";
 import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -80,6 +81,11 @@ function Router() {
           <Route path="/email-settings">
             <Layout>
               <EmailSettings />
+            </Layout>
+          </Route>
+          <Route path="/sso-settings">
+            <Layout>
+              <SsoSettings />
             </Layout>
           </Route>
           <Route path="/analytics">
