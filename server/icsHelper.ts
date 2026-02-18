@@ -9,6 +9,7 @@ interface CalendarEvent {
   organizerName?: string;
   organizerEmail?: string;
   attendees?: string[];
+  method?: 'REQUEST' | 'CANCEL';
 }
 
 /**
@@ -38,6 +39,7 @@ export function generateICS(event: CalendarEvent): string {
   const timestamp = formatDate(new Date());
   const startDate = formatDate(event.startDateTime);
   const endDate = formatDate(event.endDateTime);
+  const method = event.method || 'REQUEST';
 
   // Build ICS content with proper RFC5545 format
   let icsContent = [
@@ -45,7 +47,7 @@ export function generateICS(event: CalendarEvent): string {
     'VERSION:2.0',
     'PRODID:-//Room Booking System//Calendar//EN',
     'CALSCALE:GREGORIAN',
-    'METHOD:REQUEST',
+    `METHOD:${method}`,
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${timestamp}`,
@@ -70,13 +72,17 @@ export function generateICS(event: CalendarEvent): string {
   // Add attendees with proper RSVP flags
   if (event.attendees && event.attendees.length > 0) {
     event.attendees.forEach((attendee) => {
-      icsContent.push(`ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee}`);
+      if (method === 'CANCEL') {
+        icsContent.push(`ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=DECLINED:mailto:${attendee}`);
+      } else {
+        icsContent.push(`ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${attendee}`);
+      }
     });
   }
 
   icsContent.push(
-    'STATUS:CONFIRMED',
-    'SEQUENCE:0',
+    method === 'CANCEL' ? 'STATUS:CANCELLED' : 'STATUS:CONFIRMED',
+    'SEQUENCE:1',
     'TRANSP:OPAQUE',
     'END:VEVENT',
     'END:VCALENDAR'

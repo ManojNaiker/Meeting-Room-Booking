@@ -497,6 +497,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Booking not found" });
       }
+
+      // Send cancellation emails to participants
+      const participants = Array.isArray(booking.participants) ? booking.participants as string[] : [];
+      if (participants.length > 0) {
+        try {
+          const emailSettings = await storage.getEmailSettings();
+          if (emailSettings && emailSettings.enableBookingNotifications) {
+            const room = await storage.getRoom(booking.roomId);
+            const transporter = nodemailer.createTransport({
+              host: emailSettings.smtpHost,
+              port: emailSettings.smtpPort,
+              secure: emailSettings.smtpPort === 465,
+              auth: {
+                user: emailSettings.smtpUsername,
+                pass: emailSettings.smtpPassword,
+              },
+            });
+
+            // Generate ICS cancellation
+            const icsContent = generateICS({
+              title: `CANCELLED: ${booking.title}`,
+              description: booking.description || undefined,
+              location: room?.name || 'Meeting Room',
+              startDateTime: new Date(booking.startDateTime),
+              endDateTime: new Date(booking.endDateTime),
+              organizerName: `${user?.firstName} ${user?.lastName}`,
+              organizerEmail: user?.email || emailSettings.fromEmail,
+              attendees: participants,
+              method: 'CANCEL',
+            });
+
+            const formatDate = (date: Date) => {
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              return `${month}/${day}/${year}`;
+            };
+
+            const formatTime = (date: Date) => {
+              const hours = date.getHours();
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              const ampm = hours >= 12 ? 'PM' : 'AM';
+              const displayHours = hours % 12 || 12;
+              return `${displayHours}:${minutes} ${ampm}`;
+            };
+
+            const emailContent = `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">Meeting Cancelled</h2>
+                <p>The following meeting has been cancelled by the organizer:</p>
+                <div style="background-color: #fee2e2; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                  <p style="margin: 8px 0;"><strong>Title:</strong> ${booking.title}</p>
+                  <p style="margin: 8px 0;"><strong>Room:</strong> ${room?.name}</p>
+                  <p style="margin: 8px 0;"><strong>Date:</strong> ${formatDate(new Date(booking.startDateTime))}</p>
+                  <p style="margin: 8px 0;"><strong>Time:</strong> ${formatTime(new Date(booking.startDateTime))} - ${formatTime(new Date(booking.endDateTime))}</p>
+                  <p style="margin: 8px 0;"><strong>Organizer:</strong> ${user?.firstName} ${user?.lastName} (${user?.email})</p>
+                </div>
+                <p style="color: #6b7280; font-size: 14px; margin-top: 16px;">
+                  📅 A cancellation update is attached. Your calendar (Outlook, Google Calendar, etc.) should automatically remove or mark this meeting as cancelled when you open this email.
+                </p>
+              </div>
+            `;
+
+            for (const participantEmail of participants) {
+              try {
+                await transporter.sendMail({
+                  from: `"${emailSettings.fromName}" <${emailSettings.fromEmail}>`,
+                  to: participantEmail,
+                  subject: `Cancelled: ${booking.title}`,
+                  html: emailContent,
+                  icalEvent: {
+                    method: 'CANCEL',
+                    content: icsContent,
+                  },
+                });
+                console.log(`[Email] ✓ Successfully sent cancellation notification to ${participantEmail}`);
+              } catch (err: any) {
+                console.error(`[Email] ✗ Failed to send cancellation to ${participantEmail}:`, err.message);
+              }
+            }
+          }
+        } catch (emailError: any) {
+          console.error('[Email] Error in cancellation notification process:', emailError.message);
+        }
+      }
+
       await createAuditLog(req, 'delete', 'booking', id.toString());
       res.json({ message: "Booking deleted successfully" });
     } catch (error) {
