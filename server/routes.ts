@@ -26,6 +26,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Create sample notifications
   const { createSampleNotifications } = await import("./createSampleNotifications");
+  // We don't want to create sample notifications on every restart if they already exist
+  // for a clean production feel, but for migration verification we can keep it for now
+  // or wrap it in a check.
   await createSampleNotifications();
   
   // Auth middleware

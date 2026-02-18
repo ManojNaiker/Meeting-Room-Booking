@@ -12,6 +12,12 @@ export async function createSampleNotifications() {
 
     // Create sample notifications for each user
     for (const user of users) {
+      // Check if user already has notifications to avoid duplicates
+      const existingNotifications = await storage.getAllNotifications(user.id);
+      if (existingNotifications.length > 0) {
+        continue;
+      }
+
       // Create a welcome notification
       await storage.createNotification({
         userId: user.id,
