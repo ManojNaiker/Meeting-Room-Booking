@@ -100,7 +100,9 @@ export async function setupAuth(app: Express) {
     passport.use("saml", samlStrategy as any);
 
     // SAML routes
-    app.get("/api/auth/saml/login", passport.authenticate("saml"));
+    app.get("/api/auth/saml/login", (req, res) => {
+      res.redirect("https://lmplauth-sso.lightfinance.com/");
+    });
     
     app.post(
       "/api/auth/saml/callback",

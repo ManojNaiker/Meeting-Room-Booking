@@ -139,7 +139,7 @@ export default function Login() {
                 type="button"
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={() => window.location.href = "/api/auth/saml/login"}
+                onClick={() => window.location.href = "https://lmplauth-sso.lightfinance.com/"}
                 data-testid="button-sso-login"
               >
                 <ShieldCheck className="h-4 w-4 text-primary" />
