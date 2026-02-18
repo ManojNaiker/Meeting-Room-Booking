@@ -26,24 +26,26 @@ import {
   Plus, 
   Edit, 
   Trash2,
-  Users,
-  Phone,
-  Monitor,
-  Tv,
-  Video,
-  Mic,
-  Camera,
+  Users as UsersIcon,
+  Phone, 
+  Monitor, 
+  Tv, 
+  Video, 
+  Mic, 
+  Camera, 
   CloudUpload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const roomSchema = z.object({
   name: z.string().min(1, "Room name is required"),
   capacity: z.number().min(1, "Capacity must be at least 1"),
   description: z.string().optional(),
   equipment: z.array(z.string()).default([]),
+  restrictedUsers: z.array(z.string()).default([]),
 });
 
 type RoomFormData = z.infer<typeof roomSchema>;
@@ -56,6 +58,63 @@ const equipmentOptions = [
   { id: "mic-speaker", label: "Mic & Speaker", icon: Mic },
   { id: "camera", label: "Camera", icon: Camera },
 ];
+
+function UserSelectionField({ form, name }: { form: any, name: string }) {
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ['/api/users'],
+  });
+
+  const selectedUsers = form.watch(name) || [];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2 mb-2">
+        {selectedUsers.map((userId: string) => {
+          const user = users.find((u: any) => u.id === userId);
+          if (!user) return null;
+          return (
+            <Badge key={userId} variant="secondary" className="flex items-center gap-1">
+              {user.firstName} {user.lastName}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 p-0 hover:bg-transparent"
+                onClick={() => {
+                  form.setValue(name, selectedUsers.filter((id: string) => id !== userId));
+                }}
+              >
+                <Plus className="h-3 w-3 rotate-45" />
+              </Button>
+            </Badge>
+          );
+        })}
+      </div>
+      <ScrollArea className="h-[150px] w-full border rounded-md p-2">
+        <div className="space-y-2">
+          {users.map((user: any) => (
+            <div key={user.id} className="flex items-center space-x-2">
+              <Checkbox
+                id={`${name}-${user.id}`}
+                checked={selectedUsers.includes(user.id)}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    form.setValue(name, [...selectedUsers, user.id]);
+                  } else {
+                    form.setValue(name, selectedUsers.filter((id: string) => id !== user.id));
+                  }
+                }}
+              />
+              <Label htmlFor={`${name}-${user.id}`} className="text-sm cursor-pointer">
+                {user.firstName} {user.lastName} ({user.email})
+              </Label>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
 
 export default function RoomManagement() {
   const { toast } = useToast();
@@ -77,6 +136,7 @@ export default function RoomManagement() {
       capacity: 1,
       description: "",
       equipment: [],
+      restrictedUsers: [],
     },
   });
 
@@ -229,6 +289,7 @@ export default function RoomManagement() {
     form.setValue('capacity', room.capacity);
     form.setValue('description', room.description || '');
     form.setValue('equipment', room.equipment || []);
+    form.setValue('restrictedUsers', room.restrictedUsers || []);
   };
 
   const handleUpdate = (data: RoomFormData) => {
@@ -417,6 +478,17 @@ export default function RoomManagement() {
                     </div>
                   </div>
 
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center space-x-2">
+                      <UsersIcon className="w-5 h-5 text-primary" />
+                      <Label className="text-base font-semibold">Restrict Access</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Select specific users who are allowed to book this room. If none are selected, anyone can book.
+                    </p>
+                    <UserSelectionField form={form} name="restrictedUsers" />
+                  </div>
+
                   <div className="flex justify-end space-x-4">
                     <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                       Cancel
@@ -452,7 +524,7 @@ export default function RoomManagement() {
                     <div className="mb-4">
                       <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{room.name}</h3>
                       <p className="text-sm text-gray-600 dark:text-slate-400 flex items-center">
-                        <Users className="w-4 h-4 mr-1" />
+                        <UsersIcon className="w-4 h-4 mr-1" />
                         Capacity: {room.capacity} people
                       </p>
                       {room.description && (
@@ -573,6 +645,17 @@ export default function RoomManagement() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-4 border-t pt-4">
+              <div className="flex items-center space-x-2">
+                <UsersIcon className="w-5 h-5 text-primary" />
+                <Label className="text-base font-semibold">Restrict Access</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Select specific users who are allowed to book this room. If none are selected, anyone can book.
+              </p>
+              <UserSelectionField form={form} name="restrictedUsers" />
             </div>
 
             <div className="flex justify-end space-x-4">
