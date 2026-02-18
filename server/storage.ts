@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, ilike, or, ne, lt, gt } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 export interface IStorage {
   // User operations (updated for email/password auth)
@@ -67,6 +68,7 @@ export interface IStorage {
     bookedToday: number;
     weeklyBookings: number;
   }>;
+  getAnalyticsData(): Promise<any>;
   
   // Email settings operations
   getEmailSettings(): Promise<EmailSettings | undefined>;
@@ -269,7 +271,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBooking(booking: InsertBooking): Promise<Booking> {
-    const [newBooking] = await db.insert(bookings).values(booking).returning();
+    const calendarUid = uuidv4();
+    const [newBooking] = await db
+      .insert(bookings)
+      .values({ ...booking, calendarUid })
+      .returning();
     return newBooking;
   }
 
@@ -465,6 +471,120 @@ export class DatabaseStorage implements IStorage {
       availableRooms: Math.max(0, availableRooms),
       bookedToday: bookedToday.length,
       weeklyBookings: weeklyBookings.length,
+    };
+  }
+
+  async getAnalyticsData(): Promise<any> {
+    const allRooms = await db.select().from(rooms).where(eq(rooms.isActive, true));
+    const allBookings = await db
+      .select({
+        id: bookings.id,
+        roomId: bookings.roomId,
+        userId: bookings.userId,
+        startDateTime: bookings.startDateTime,
+        endDateTime: bookings.endDateTime,
+        status: bookings.status,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+      })
+      .from(bookings)
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .where(or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending"), eq(bookings.status, "cancelled")));
+
+    // 1. Room Utilization (Bookings per room)
+    const roomUtilization = allRooms.map(room => {
+      const roomBookings = allBookings.filter(b => b.roomId === room.id);
+      return {
+        name: room.name,
+        bookings: roomBookings.length,
+        capacity: room.capacity
+      };
+    });
+
+    // 2. Booking Trends (Last 7 days)
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+
+    const bookingTrends = last7Days.map(date => {
+      const dateEnd = new Date(date);
+      dateEnd.setHours(23, 59, 59, 999);
+      
+      const dayBookings = allBookings.filter(b => 
+        b.startDateTime >= date && b.startDateTime <= dateEnd
+      );
+
+      const totalDuration = dayBookings.reduce((acc, b) => {
+        const duration = (b.endDateTime.getTime() - b.startDateTime.getTime()) / (1000 * 60 * 60);
+        return acc + duration;
+      }, 0);
+
+      return {
+        date: date.toISOString().split('T')[0],
+        bookings: dayBookings.length,
+        duration: dayBookings.length > 0 ? Number((totalDuration / dayBookings.length).toFixed(1)) : 0
+      };
+    });
+
+    // 3. User Activity (Top bookers)
+    const userBookingsMap = new Map<string, { name: string, bookings: number, hours: number }>();
+    
+    allBookings.forEach(booking => {
+      const userName = booking.userFirstName ? `${booking.userFirstName} ${booking.userLastName || ''}`.trim() : 'Unknown User';
+      const duration = (booking.endDateTime.getTime() - booking.startDateTime.getTime()) / (1000 * 60 * 60);
+      
+      const stats = userBookingsMap.get(booking.userId) || { name: userName, bookings: 0, hours: 0 };
+      stats.bookings += 1;
+      stats.hours += duration;
+      userBookingsMap.set(booking.userId, stats);
+    });
+
+    const userActivity = Array.from(userBookingsMap.values())
+      .sort((a, b) => b.bookings - a.bookings)
+      .slice(0, 5)
+      .map(u => ({ ...u, hours: Math.round(u.hours) }));
+
+    const totalBookings = allBookings.length;
+    const uniqueUsers = new Set(allBookings.map(b => b.userId)).size;
+    const totalHours = allBookings.reduce((acc, b) => acc + (b.endDateTime.getTime() - b.startDateTime.getTime()) / (1000 * 60 * 60), 0);
+    const avgDuration = totalBookings > 0 ? Number((totalHours / totalBookings).toFixed(1)) : 0;
+
+    // Booking status distribution
+    const statusCounts = {
+      confirmed: allBookings.filter(b => b.status === 'confirmed').length,
+      pending: allBookings.filter(b => b.status === 'pending').length,
+      cancelled: allBookings.filter(b => b.status === 'cancelled').length,
+    };
+
+    const totalWithStatus = statusCounts.confirmed + statusCounts.pending + statusCounts.cancelled;
+    const bookingStatus = [
+      { name: 'Confirmed', value: statusCounts.confirmed, color: '#00C49F' },
+      { name: 'Pending', value: statusCounts.pending, color: '#FFBB28' },
+      { name: 'Cancelled', value: statusCounts.cancelled, color: '#FF8042' },
+    ];
+
+    return {
+      summary: {
+        totalBookings,
+        totalBookingsChange: 0,
+        uniqueUsers,
+        uniqueUsersChange: 0,
+        averageBookingDuration: avgDuration,
+        averageBookingDurationChange: 0,
+        peakUtilization: 0, // Placeholder
+        peakUtilizationChange: 0,
+      },
+      roomUtilization,
+      bookingTrends,
+      timeDistribution: Array.from({ length: 12 }, (_, i) => ({
+        hour: i + 8,
+        bookings: allBookings.filter(b => b.startDateTime.getHours() === (i + 8)).length,
+      })),
+      userActivity,
+      bookingStatus
     };
   }
 

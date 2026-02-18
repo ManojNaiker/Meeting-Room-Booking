@@ -57,13 +57,26 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-  await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-  });
+  const user = await storage.getUserByEmail(claims["email"]);
+  if (user) {
+    await storage.updateUser(user.id, {
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
+    });
+  } else {
+    await storage.createUser({
+      id: claims["sub"],
+      email: claims["email"],
+      firstName: claims["first_name"],
+      lastName: claims["last_name"],
+      profileImageUrl: claims["profile_image_url"],
+      passwordHash: "REPLIT_AUTH_ONLY",
+      role: "user",
+      isActivated: true,
+      mustChangePassword: false,
+    });
+  }
 }
 
 export async function setupAuth(app: Express) {
