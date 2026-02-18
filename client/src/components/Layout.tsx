@@ -618,6 +618,9 @@ function getPageTitle(location: string): string {
     '/my-bookings': 'My Bookings',
     '/users': 'User Management',
     '/rooms': 'Room Management',
+    '/email-settings': 'Email Settings',
+    '/sso-settings': 'SSO Settings',
+    '/analytics': 'Analytics',
     '/audit': 'Audit Log',
   };
   return titles[location] || 'Dashboard';
@@ -631,6 +634,9 @@ function getPageSubtitle(location: string): string {
     '/my-bookings': 'Manage your current and upcoming bookings',
     '/users': 'Manage user accounts and permissions',
     '/rooms': 'Manage meeting rooms and their equipment',
+    '/email-settings': 'Configure email notifications and SMTP',
+    '/sso-settings': 'Configure SAML SSO integration',
+    '/analytics': 'View usage statistics and reports',
     '/audit': 'View system activity and changes',
   };
   return subtitles[location] || 'Welcome back';
@@ -641,6 +647,7 @@ function getAdminToolDescription(toolName: string): string {
     'User Management': 'Manage user accounts and permissions',
     'Room Management': 'Add, edit, and manage meeting rooms',
     'Email Settings': 'Configure email notifications and SMTP',
+    'SSO Settings': 'Configure SAML SSO integration',
     'Analytics': 'View usage statistics and reports',
     'Audit Log': 'Monitor system activity and changes',
   };
