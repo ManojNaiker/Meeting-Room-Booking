@@ -52,6 +52,7 @@ export const rooms = pgTable("rooms", {
   imageUrl: varchar("image_url"),
   equipment: jsonb("equipment").default("[]"), // Array of equipment strings
   isActive: boolean("is_active").default(true),
+  restrictedUsers: jsonb("restricted_users").default("[]"), // Array of user IDs who can book this room
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -211,6 +212,8 @@ export const insertRoomSchema = createInsertSchema(rooms).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  restrictedUsers: z.array(z.string()).default([]),
 });
 
 export const insertBookingSchema = createInsertSchema(bookings).omit({

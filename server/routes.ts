@@ -294,6 +294,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user.id,
       });
       
+      // Check if user is restricted from this room
+      const room = await storage.getRoom(bookingData.roomId);
+      if (room?.restrictedUsers && Array.isArray(room.restrictedUsers) && room.restrictedUsers.length > 0) {
+        if (!room.restrictedUsers.includes(req.user.id) && user?.role !== 'admin') {
+          return res.status(403).json({ message: "You are not authorized to book this room." });
+        }
+      }
+      
       // Check for conflicts
       const hasConflict = await storage.checkBookingConflict(
         bookingData.roomId,
