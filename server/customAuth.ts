@@ -101,6 +101,9 @@ export async function setupAuth(app: Express) {
 
     // SAML routes
     app.get("/api/auth/saml/login", (req, res) => {
+      if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
+        return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
+      }
       // Direct redirect to the SSO provider
       res.redirect("https://lmplauth-sso.lightfinance.com/");
     });
@@ -108,6 +111,9 @@ export async function setupAuth(app: Express) {
     app.post(
       "/api/auth/saml/callback",
       (req, res, next) => {
+        if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
+          return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
+        }
         // Since we are redirecting externally, we need to ensure the callback
         // still uses the SAML strategy for validation if the provider posts back here.
         passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false })(req, res, next);
@@ -133,10 +139,21 @@ export async function setupAuth(app: Express) {
     );
 
     app.get("/api/auth/saml/metadata", (req, res) => {
+      if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
+        return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
+      }
       res.type("application/xml");
       res.status(200).send(
         samlStrategy.generateServiceProviderMetadata(emailSettings.samlCert || "")
       );
+    });
+  } else {
+    // Fallback routes for when SAML is not configured
+    app.get(["/api/auth/saml/login", "/api/auth/saml/metadata"], (req, res) => {
+      res.status(404).json({ message: "SAML SSO is not configured or enabled." });
+    });
+    app.post("/api/auth/saml/callback", (req, res) => {
+      res.status(404).json({ message: "SAML SSO is not configured or enabled." });
     });
   }
 
