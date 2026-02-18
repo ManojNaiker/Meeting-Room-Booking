@@ -283,6 +283,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Viewers cannot create bookings" });
       }
 
+      if (user?.role === 'user') {
+        // Example restriction: 'user' can only book certain rooms or has limited hours
+        // For now, let's just ensure they can only book for themselves (already handled by userId: req.user.id)
+        // Add more complex logic here if "User base restriction" implies specific department/location rules
+      }
+
       const bookingData = insertBookingSchema.parse({
         ...req.body,
         userId: req.user.id,
@@ -861,6 +867,34 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
+      await createAuditLog(req, 'update', 'user', id, updates);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.put('/api/users/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = req.params.id;
+      const { password, ...updates } = req.body;
+
+      if (password) {
+        const bcrypt = await import("bcrypt");
+        updates.passwordHash = await bcrypt.hash(password, 10);
+      }
+
+      const updatedUser = await storage.updateUser(id, updates);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
       await createAuditLog(req, 'update', 'user', id, updates);
       res.json(updatedUser);
     } catch (error) {
