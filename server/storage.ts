@@ -483,12 +483,13 @@ export class DatabaseStorage implements IStorage {
         userId: bookings.userId,
         startDateTime: bookings.startDateTime,
         endDateTime: bookings.endDateTime,
+        status: bookings.status,
         userFirstName: users.firstName,
         userLastName: users.lastName,
       })
       .from(bookings)
       .leftJoin(users, eq(bookings.userId, users.id))
-      .where(eq(bookings.status, "confirmed"));
+      .where(or(eq(bookings.status, "confirmed"), eq(bookings.status, "pending"), eq(bookings.status, "cancelled")));
 
     // 1. Room Utilization (Bookings per room)
     const roomUtilization = allRooms.map(room => {
@@ -546,16 +547,44 @@ export class DatabaseStorage implements IStorage {
       .slice(0, 5)
       .map(u => ({ ...u, hours: Math.round(u.hours) }));
 
+    const totalBookings = allBookings.length;
+    const uniqueUsers = new Set(allBookings.map(b => b.userId)).size;
+    const totalHours = allBookings.reduce((acc, b) => acc + (b.endDateTime.getTime() - b.startDateTime.getTime()) / (1000 * 60 * 60), 0);
+    const avgDuration = totalBookings > 0 ? Number((totalHours / totalBookings).toFixed(1)) : 0;
+
+    // Booking status distribution
+    const statusCounts = {
+      confirmed: allBookings.filter(b => b.status === 'confirmed').length,
+      pending: allBookings.filter(b => b.status === 'pending').length,
+      cancelled: allBookings.filter(b => b.status === 'cancelled').length,
+    };
+
+    const totalWithStatus = statusCounts.confirmed + statusCounts.pending + statusCounts.cancelled;
+    const bookingStatus = [
+      { name: 'Confirmed', value: statusCounts.confirmed, color: '#00C49F' },
+      { name: 'Pending', value: statusCounts.pending, color: '#FFBB28' },
+      { name: 'Cancelled', value: statusCounts.cancelled, color: '#FF8042' },
+    ];
+
     return {
+      summary: {
+        totalBookings,
+        totalBookingsChange: 0,
+        uniqueUsers,
+        uniqueUsersChange: 0,
+        averageBookingDuration: avgDuration,
+        averageBookingDurationChange: 0,
+        peakUtilization: 0, // Placeholder
+        peakUtilizationChange: 0,
+      },
       roomUtilization,
       bookingTrends,
-      peakHours: [
-        { hour: '09:00', bookings: Math.floor(Math.random() * 10) }, // Mocking peak hours for now as it needs more complex SQL or processing
-        { hour: '11:00', bookings: Math.floor(Math.random() * 15) },
-        { hour: '14:00', bookings: Math.floor(Math.random() * 20) },
-        { hour: '16:00', bookings: Math.floor(Math.random() * 12) }
-      ],
-      userActivity
+      timeDistribution: Array.from({ length: 12 }, (_, i) => ({
+        hour: i + 8,
+        bookings: allBookings.filter(b => b.startDateTime.getHours() === (i + 8)).length,
+      })),
+      userActivity,
+      bookingStatus
     };
   }
 
