@@ -321,6 +321,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const booking = await storage.createBooking(bookingData);
       await createAuditLog(req, 'create', 'booking', booking.id.toString(), booking);
       
+      // Create in-app notification for the organizer
+      const { createNotificationForBooking } = await import("./notificationHelpers");
+      await createNotificationForBooking(
+        req.user.id,
+        'created',
+        booking.id.toString(),
+        room?.name || 'Meeting Room',
+        new Date(booking.startDateTime),
+        new Date(booking.endDateTime)
+      );
+
       // Send notification emails to participants
       const participants = Array.isArray(booking.participants) ? booking.participants as string[] : [];
       if (participants.length > 0) {
@@ -477,6 +488,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedBooking = await storage.updateBooking(id, updates);
       await createAuditLog(req, 'update', 'booking', id.toString(), updates);
+
+      // Create in-app notification for the user
+      const { createNotificationForBooking } = await import("./notificationHelpers");
+      const room = await storage.getRoom(updatedBooking!.roomId);
+      await createNotificationForBooking(
+        req.user.id,
+        'updated',
+        id.toString(),
+        room?.name || 'Meeting Room',
+        new Date(updatedBooking!.startDateTime),
+        new Date(updatedBooking!.endDateTime)
+      );
+
       res.json(updatedBooking);
     } catch (error) {
       console.error("Error updating booking:", error);
@@ -501,6 +525,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Booking not found" });
       }
+
+      // Create in-app notification for the user
+      const { createNotificationForBooking } = await import("./notificationHelpers");
+      const room = await storage.getRoom(booking.roomId);
+      await createNotificationForBooking(
+        req.user.id,
+        'cancelled',
+        id.toString(),
+        room?.name || 'Meeting Room',
+        new Date(booking.startDateTime),
+        new Date(booking.endDateTime)
+      );
 
       // Send cancellation emails to participants
       const participants = Array.isArray(booking.participants) ? booking.participants as string[] : [];
