@@ -245,6 +245,11 @@ export const insertEmailSettingsSchema = createInsertSchema(emailSettings).omit(
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  smtpPort: z.preprocess((val) => parseInt(String(val), 10), z.number()),
+  samlCert: z.string().optional().nullable(),
+  samlIssuer: z.string().optional().nullable(),
+  samlEntryPoint: z.string().optional().nullable(),
 });
 
 export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({
