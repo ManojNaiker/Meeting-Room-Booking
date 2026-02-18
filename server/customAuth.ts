@@ -60,36 +60,38 @@ export async function setupAuth(app: Express) {
         cert: emailSettings.samlCert || "",
         callbackUrl: "/api/auth/saml/callback",
       },
-      async (profile: any, done: any) => {
-        try {
-          const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
-          if (!email) {
-            return done(new Error("Email not found in SAML profile"));
-          }
-
-          let user = await storage.getUserByEmail(email);
-          if (!user) {
-            console.log(`[SAML] User ${email} not found, creating new account...`);
-            const { v4: uuidv4 } = await import("uuid");
-            user = await storage.createUser({
-              id: uuidv4(),
-              email: email,
-              firstName: profile.firstName || profile.givenName || "SSO",
-              lastName: profile.lastName || profile.surname || "User",
-              role: "user",
-              passwordHash: "SSO_AUTH_ONLY",
-              isActivated: true,
-              mustChangePassword: false,
-            });
-          }
-
-          return done(null, user);
-        } catch (err) {
-          return done(err);
+      (profile: any, done: any) => {
+        const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
+        if (!email) {
+          return done(new Error("Email not found in SAML profile"));
         }
+
+        (async () => {
+          try {
+            let user = await storage.getUserByEmail(email);
+            if (!user) {
+              console.log(`[SAML] User ${email} not found, creating new account...`);
+              const { v4: uuidv4 } = await import("uuid");
+              user = await storage.createUser({
+                id: uuidv4(),
+                email: email,
+                firstName: profile.firstName || profile.givenName || "SSO",
+                lastName: profile.lastName || profile.surname || "User",
+                role: "user",
+                passwordHash: "SSO_AUTH_ONLY",
+                isActivated: true,
+                mustChangePassword: false,
+              });
+            }
+
+            return done(null, user);
+          } catch (err) {
+            return done(err);
+          }
+        })();
       }
     );
-    passport.use("saml", samlStrategy);
+    passport.use("saml", samlStrategy as any);
 
     // SAML routes
     app.get("/api/auth/saml/login", passport.authenticate("saml"));
