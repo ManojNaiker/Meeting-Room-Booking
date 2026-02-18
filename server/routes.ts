@@ -355,6 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               organizerName: `${user?.firstName} ${user?.lastName}`,
               organizerEmail: user?.email || emailSettings.fromEmail,
               attendees: participants,
+              uid: booking.calendarUid || undefined,
             });
 
             // Send email to each participant
@@ -526,6 +527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               organizerEmail: user?.email || emailSettings.fromEmail,
               attendees: participants,
               method: 'CANCEL',
+              uid: booking.calendarUid || undefined,
             });
 
             const formatDate = (date: Date) => {

@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, ilike, or, ne, lt, gt } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 export interface IStorage {
   // User operations (updated for email/password auth)
@@ -269,7 +270,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createBooking(booking: InsertBooking): Promise<Booking> {
-    const [newBooking] = await db.insert(bookings).values(booking).returning();
+    const calendarUid = uuidv4();
+    const [newBooking] = await db
+      .insert(bookings)
+      .values({ ...booking, calendarUid })
+      .returning();
     return newBooking;
   }
 

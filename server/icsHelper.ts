@@ -10,6 +10,7 @@ interface CalendarEvent {
   organizerEmail?: string;
   attendees?: string[];
   method?: 'REQUEST' | 'CANCEL';
+  uid?: string;
 }
 
 /**
@@ -35,7 +36,7 @@ export function generateICS(event: CalendarEvent): string {
       .replace(/\n/g, '\\n');
   };
 
-  const uid = uuidv4();
+  const uid = event.uid || uuidv4();
   const timestamp = formatDate(new Date());
   const startDate = formatDate(event.startDateTime);
   const endDate = formatDate(event.endDateTime);
@@ -82,7 +83,7 @@ export function generateICS(event: CalendarEvent): string {
 
   icsContent.push(
     method === 'CANCEL' ? 'STATUS:CANCELLED' : 'STATUS:CONFIRMED',
-    'SEQUENCE:1',
+    'SEQUENCE:${method === "CANCEL" ? "2" : "1"}',
     'TRANSP:OPAQUE',
     'END:VEVENT',
     'END:VCALENDAR'

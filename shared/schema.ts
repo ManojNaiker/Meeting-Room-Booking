@@ -74,6 +74,7 @@ export const bookings = pgTable("bookings", {
   remindMe: boolean("remind_me").default(false),
   reminderTime: integer("reminder_time").default(15), // minutes before
   reminderSent: boolean("reminder_sent").default(false),
+  calendarUid: varchar("calendar_uid"),
   status: varchar("status").default("confirmed"), // confirmed, cancelled, pending
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
