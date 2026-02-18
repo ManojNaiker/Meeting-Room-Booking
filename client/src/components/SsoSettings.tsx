@@ -54,7 +54,10 @@ export default function SsoSettings() {
 
   const mutation = useMutation({
     mutationFn: async (values: any) => {
-      const res = await apiRequest("POST", "/api/admin/email-settings", values);
+      const res = await apiRequest("/api/admin/email-settings", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
       return res.json();
     },
     onSuccess: () => {
