@@ -101,12 +101,17 @@ export async function setupAuth(app: Express) {
 
     // SAML routes
     app.get("/api/auth/saml/login", (req, res) => {
+      // Direct redirect to the SSO provider
       res.redirect("https://lmplauth-sso.lightfinance.com/");
     });
-    
+
     app.post(
       "/api/auth/saml/callback",
-      passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
+      (req, res, next) => {
+        // Since we are redirecting externally, we need to ensure the callback
+        // still uses the SAML strategy for validation if the provider posts back here.
+        passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false })(req, res, next);
+      },
       async (req: any, res) => {
         // Create session compatible with existing auth
         req.session.user = {
