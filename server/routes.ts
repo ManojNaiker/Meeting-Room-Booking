@@ -1552,71 +1552,7 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const { dateRange = '7d', roomId = 'all', utilizationView = 'week' } = req.query;
-      
-      // Mock analytics data - in production, this would query the database
-      // The utilizationView parameter (day/week/month) adjusts the time granularity
-      
-      // Generate room utilization data based on the view type
-      const getRoomUtilizationData = (view: string) => {
-        const baseRooms = [
-          { name: 'Conference Room A', base: 45 },
-          { name: 'Meeting Room B', base: 38 },
-          { name: 'Board Room', base: 22 },
-          { name: 'Training Room', base: 31 },
-          { name: 'Executive Suite', base: 18 },
-        ];
-        
-        // Adjust multipliers based on view type
-        const multiplier = view === 'day' ? 0.3 : view === 'month' ? 4.2 : 1;
-        
-        return baseRooms.map(room => ({
-          name: room.name,
-          bookings: Math.round(room.base * multiplier),
-          utilization: Math.min(95, Math.round((room.base * multiplier * 2.1) % 100)),
-          hours: Math.round(room.base * multiplier * 2.3),
-        }));
-      };
-      
-      const analyticsData = {
-        summary: {
-          totalBookings: 245,
-          totalBookingsChange: 12.5,
-          uniqueUsers: 89,
-          uniqueUsersChange: 8.2,
-          averageBookingDuration: 2.3,
-          averageBookingDurationChange: -5.1,
-          peakUtilization: 87,
-          peakUtilizationChange: 15.3,
-        },
-        bookingTrends: [
-          { date: '2024-01-01', bookings: 12, duration: 2.1 },
-          { date: '2024-01-02', bookings: 15, duration: 2.4 },
-          { date: '2024-01-03', bookings: 18, duration: 2.0 },
-          { date: '2024-01-04', bookings: 22, duration: 2.6 },
-          { date: '2024-01-05', bookings: 19, duration: 2.2 },
-          { date: '2024-01-06', bookings: 16, duration: 2.3 },
-          { date: '2024-01-07', bookings: 21, duration: 2.5 },
-        ],
-        roomUtilization: getRoomUtilizationData(utilizationView as string),
-        timeDistribution: Array.from({ length: 12 }, (_, i) => ({
-          hour: i + 8,
-          bookings: Math.floor(Math.random() * 30) + 5,
-        })),
-        userActivity: [
-          { name: 'John Doe', bookings: 15, hours: 32 },
-          { name: 'Jane Smith', bookings: 12, hours: 28 },
-          { name: 'Mike Johnson', bookings: 10, hours: 25 },
-          { name: 'Sarah Wilson', bookings: 8, hours: 18 },
-          { name: 'David Brown', bookings: 7, hours: 16 },
-        ],
-        bookingStatus: [
-          { name: 'Confirmed', value: 185, color: '#00C49F' },
-          { name: 'Pending', value: 42, color: '#FFBB28' },
-          { name: 'Cancelled', value: 18, color: '#FF8042' },
-        ],
-      };
-      
+      const analyticsData = await storage.getAnalyticsData();
       res.json(analyticsData);
     } catch (error) {
       console.error("Error fetching analytics:", error);
