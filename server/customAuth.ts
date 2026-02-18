@@ -3,7 +3,8 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
-import crypto from "crypto";
+import passport from "passport";
+import { Strategy as SamlStrategy } from "@node-saml/passport-saml";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -31,6 +32,98 @@ export function getSession() {
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.serializeUser((user: any, done) => {
+    done(null, user.id);
+  });
+
+  passport.deserializeUser(async (id: string, done) => {
+    try {
+      const user = await storage.getUser(id);
+      done(null, user);
+    } catch (err) {
+      done(err);
+    }
+  });
+
+  // Initialize SAML strategy if enabled
+  const emailSettings = await storage.getEmailSettings();
+  if (emailSettings?.enableSso && emailSettings.samlEntryPoint) {
+    console.log("[SAML] Configuring SAML Strategy with Skillmine...");
+    const samlStrategy = new SamlStrategy(
+      {
+        path: "/api/auth/saml/callback",
+        entryPoint: emailSettings.samlEntryPoint,
+        issuer: emailSettings.samlIssuer || "Skillmine",
+        cert: emailSettings.samlCert || "",
+        callbackUrl: "/api/auth/saml/callback",
+      },
+      async (profile: any, done: any) => {
+        try {
+          const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
+          if (!email) {
+            return done(new Error("Email not found in SAML profile"));
+          }
+
+          let user = await storage.getUserByEmail(email);
+          if (!user) {
+            console.log(`[SAML] User ${email} not found, creating new account...`);
+            const { v4: uuidv4 } = await import("uuid");
+            user = await storage.createUser({
+              id: uuidv4(),
+              email: email,
+              firstName: profile.firstName || profile.givenName || "SSO",
+              lastName: profile.lastName || profile.surname || "User",
+              role: "user",
+              passwordHash: "SSO_AUTH_ONLY",
+              isActivated: true,
+              mustChangePassword: false,
+            });
+          }
+
+          return done(null, user);
+        } catch (err) {
+          return done(err);
+        }
+      }
+    );
+    passport.use("saml", samlStrategy);
+
+    // SAML routes
+    app.get("/api/auth/saml/login", passport.authenticate("saml"));
+    
+    app.post(
+      "/api/auth/saml/callback",
+      passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
+      async (req: any, res) => {
+        // Create session compatible with existing auth
+        req.session.user = {
+          id: req.user.id,
+          email: req.user.email,
+          role: req.user.role,
+        };
+        
+        await storage.createAuditLog({
+          userId: req.user.id,
+          action: 'login',
+          resourceType: 'user',
+          resourceId: req.user.id,
+          details: { email: req.user.email, method: 'saml' },
+        });
+
+        res.redirect("/");
+      }
+    );
+
+    app.get("/api/auth/saml/metadata", (req, res) => {
+      res.type("application/xml");
+      res.status(200).send(
+        samlStrategy.generateServiceProviderMetadata(emailSettings.samlCert || "")
+      );
+    });
+  }
 
   // Custom login endpoint
   app.post('/api/auth/login', async (req, res) => {

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Lock, User, AlertCircle } from "lucide-react";
+import { Lock, User, AlertCircle, ShieldCheck } from "lucide-react";
 import lightLogo from "@assets/Light_Logo_1752837156719.png";
 
 export default function Login() {
@@ -124,6 +124,26 @@ export default function Login() {
                 disabled={isLoading}
               >
                 {isLoading ? "Signing in..." : "Sign in"}
+              </Button>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-slate-700"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white dark:bg-slate-800 text-gray-500">Or continue with</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2"
+                onClick={() => window.location.href = "/api/auth/saml/login"}
+                data-testid="button-sso-login"
+              >
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Sign in with SSO
               </Button>
             </form>
           </CardContent>
