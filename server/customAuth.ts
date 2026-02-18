@@ -54,11 +54,10 @@ export async function setupAuth(app: Express) {
     console.log("[SAML] Configuring SAML Strategy with Skillmine...");
     const samlStrategy = new SamlStrategy(
       {
-        path: "/api/auth/saml/callback",
+        callbackUrl: "/api/auth/saml/callback",
         entryPoint: emailSettings.samlEntryPoint,
         issuer: emailSettings.samlIssuer || "Skillmine",
         cert: emailSettings.samlCert || "",
-        callbackUrl: "/api/auth/saml/callback",
       },
       (profile: any, done: any) => {
         const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
@@ -81,6 +80,10 @@ export async function setupAuth(app: Express) {
                 passwordHash: "SSO_AUTH_ONLY",
                 isActivated: true,
                 mustChangePassword: false,
+                employeeCode: null,
+                designation: null,
+                department: null,
+                profileImageUrl: null,
               });
             }
 

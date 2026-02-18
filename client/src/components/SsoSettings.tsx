@@ -196,7 +196,7 @@ export default function SsoSettings() {
                   <p className="text-muted-foreground mt-1">
                     Provide this URL to Skillmine to complete the trust relationship:
                   </p>
-                  <code className="block mt-2 p-2 bg-background rounded border text-xs">
+                  <code className="block mt-2 p-2 bg-background rounded border text-xs break-all">
                     {window.location.origin}/api/auth/saml/metadata
                   </code>
                 </div>
