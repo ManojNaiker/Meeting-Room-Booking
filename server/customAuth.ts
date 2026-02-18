@@ -58,8 +58,8 @@ export async function setupAuth(app: Express) {
         entryPoint: emailSettings.samlEntryPoint,
         issuer: emailSettings.samlIssuer || "Skillmine",
         cert: emailSettings.samlCert || "",
-      },
-      (profile: any, done: any) => {
+      } as any,
+      ((profile: any, done: any) => {
         const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
         if (!email) {
           return done(new Error("Email not found in SAML profile"));
@@ -92,10 +92,10 @@ export async function setupAuth(app: Express) {
             return done(err);
           }
         })();
-      },
-      (profile: any, done: any) => {
+      }) as any,
+      ((profile: any, done: any) => {
         done(null, profile);
-      }
+      }) as any
     );
     passport.use("saml", samlStrategy as any);
 
