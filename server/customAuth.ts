@@ -98,11 +98,12 @@ export async function setupAuth(app: Express) {
     );
     passport.use("saml", samlStrategy as any);
 
-    app.get("/api/auth/saml/login", (req, res) => {
-      if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
+    app.get("/api/auth/saml/login", async (req, res) => {
+      const settings = await storage.getEmailSettings();
+      if (!settings?.enableSso || !settings?.samlEntryPoint) {
         return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
       }
-      res.redirect("https://lmplauth-sso.lightfinance.com/");
+      res.redirect(settings.samlEntryPoint);
     });
 
     app.post(
