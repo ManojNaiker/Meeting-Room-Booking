@@ -56,7 +56,8 @@ export async function setupAuth(app: Express) {
         callbackUrl: "/api/auth/saml/callback",
         entryPoint: emailSettings.samlEntryPoint,
         issuer: emailSettings.samlIssuer || "Skillmine",
-        cert: emailSettings.samlCert || "",
+        cert: emailSettings.samlCert || "placeholder-to-prevent-error",
+        idpCert: emailSettings.samlCert || "placeholder-to-prevent-error",
       } as any,
       ((profile: any, done: any) => {
         const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
