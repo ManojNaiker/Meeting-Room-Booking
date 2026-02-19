@@ -86,6 +86,17 @@ export async function setupAuth(app: Express) {
                 profileImageUrl: null,
               });
             }
+          })();
+        },
+        (profile: any, done: any) => {
+          return done(null, profile);
+        }
+      );
+      passport.use("saml", samlStrategy as any);
+      return samlStrategy;
+    }
+    return null;
+  };
 
             return done(null, user);
           } catch (err) {
@@ -134,9 +145,60 @@ export async function setupAuth(app: Express) {
           details: { email: req.user.email, method: 'saml' },
         });
 
-        res.redirect("/");
+  // SAML routes (Registered statically to avoid 404s)
+  console.log("[SAML] Registering static SAML routes...");
+  
+  app.get("/api/auth/saml/login", async (req, res, next) => {
+    console.log("[SAML] Hit login route");
+    const strategy = await configureSamlStrategy(req);
+    if (!strategy) {
+      return res.status(400).json({ message: "SAML is not configured or enabled" });
+    }
+    passport.authenticate("saml")(req, res, next);
+  });
+  
+  app.post(
+    "/api/auth/saml/callback",
+    async (req, res, next) => {
+      const strategy = await configureSamlStrategy(req);
+      if (!strategy) {
+        return res.status(400).json({ message: "SAML is not configured or enabled" });
       }
+      next();
+    },
+    passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
+    async (req: any, res) => {
+      // Create session compatible with existing auth
+      req.session.user = {
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role,
+      };
+      
+      await storage.createAuditLog({
+        userId: req.user.id,
+        action: 'login',
+        resourceType: 'user',
+        resourceId: req.user.id,
+        details: { email: req.user.email, method: 'saml' },
+      });
+
+      res.redirect("/");
+    }
+  );
+
+  app.get("/api/auth/saml/metadata", async (req, res) => {
+    console.log(`[SAML] Hit metadata route: ${req.method} ${req.url}`);
+    const strategy = await configureSamlStrategy(req);
+    if (!strategy) {
+      return res.status(400).json({ message: "SAML is not configured or enabled" });
+    }
+    const settings = await storage.getEmailSettings();
+    res.type("application/xml");
+    res.status(200).send(
+      strategy.generateServiceProviderMetadata(settings?.samlCert || "")
     );
+  });
 
     app.get("/api/auth/saml/metadata", (req, res) => {
       if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {

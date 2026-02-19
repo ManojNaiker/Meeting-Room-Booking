@@ -11,12 +11,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, ShieldCheck, ExternalLink } from "lucide-react";
+import { Loader2, ShieldCheck, ExternalLink, AlertTriangle, Copy, Check } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function SsoSettings() {
   const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false);
   const { data: settings, isLoading } = useQuery<EmailSettings>({
-    queryKey: ["/api/admin/email-settings"],
+    queryKey: ["/api/email-settings"],
   });
 
   const form = useForm({
@@ -33,9 +45,12 @@ export default function SsoSettings() {
       enablePasswordReset: true,
       enableLdap: false,
       enableSso: false,
+      samlJitEnabled: true,
       samlEntryPoint: "",
       samlIssuer: "",
+      samlIdpIssuer: "",
       samlCert: "",
+      samlLogoutUrl: "",
       samlServiceProvider: "Skillmine",
     },
   });
@@ -44,9 +59,12 @@ export default function SsoSettings() {
     if (settings) {
       form.reset({
         ...settings,
+        samlJitEnabled: settings.samlJitEnabled ?? true,
         samlEntryPoint: settings.samlEntryPoint || "",
-        samlIssuer: settings.samlIssuer || "",
+        samlIssuer: settings.samlIssuer || "urn:skillmine:meeting-room-booking",
+        samlIdpIssuer: settings.samlIdpIssuer || "",
         samlCert: settings.samlCert || "",
+        samlLogoutUrl: settings.samlLogoutUrl || "",
         samlServiceProvider: settings.samlServiceProvider || "Skillmine",
       } as any);
     }
@@ -54,14 +72,14 @@ export default function SsoSettings() {
 
   const mutation = useMutation({
     mutationFn: async (values: any) => {
-      const res = await apiRequest("/api/admin/email-settings", {
+      const res = await apiRequest("/api/email-settings", {
         method: "POST",
         body: JSON.stringify(values),
       });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/email-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-settings"] });
       toast({
         title: "Settings updated",
         description: "SSO configuration has been saved successfully.",
@@ -84,14 +102,50 @@ export default function SsoSettings() {
     );
   }
 
+  const handleToggleSso = (checked: boolean) => {
+    if (!checked) {
+      setShowDisableConfirm(true);
+    } else {
+      form.setValue("enableSso", true);
+      if (!form.getValues("samlIssuer")) {
+        form.setValue("samlIssuer", "urn:skillmine:meeting-room-booking");
+      }
+    }
+  };
+
+  const confirmDisableSso = () => {
+    const values = {
+      ...form.getValues(),
+      enableSso: false,
+      samlEntryPoint: "",
+      samlIssuer: "",
+      samlIdpIssuer: "",
+      samlCert: "",
+      samlLogoutUrl: "",
+      samlJitEnabled: true,
+    };
+
+    // Reset form state locally
+    form.reset(values);
+
+    // Save to backend immediately
+    mutation.mutate(values);
+
+    setShowDisableConfirm(false);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast({
+      title: "Copied to clipboard",
+      description: "Service Provider Entity ID has been copied.",
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium">SSO Configuration</h3>
-        <p className="text-sm text-muted-foreground">
-          Configure SAML Single Sign-On with Skillmine.
-        </p>
-      </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))} className="space-y-6">
@@ -112,7 +166,7 @@ export default function SsoSettings() {
                       <FormControl>
                         <Switch
                           checked={field.value}
-                          onCheckedChange={field.onChange}
+                          onCheckedChange={handleToggleSso}
                           data-testid="switch-enable-sso"
                         />
                       </FormControl>
@@ -122,37 +176,118 @@ export default function SsoSettings() {
                 />
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="samlServiceProvider"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Service Provider</FormLabel>
-                      <FormControl>
-                        <Input {...field} readOnly disabled className="bg-muted" />
-                      </FormControl>
-                      <FormDescription>The SAML Service Provider name.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            {form.watch("enableSso") && (
+              <CardContent className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="samlJitEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">JIT User Provisioning</FormLabel>
+                          <FormDescription>
+                            Automatically create a new user account if they don't exist in the application.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="toggle-saml-jit"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="samlIssuer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Identity Provider Issuer (Entity ID)</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="https://skillmine.example.com/adfs/services/trust" data-testid="input-saml-issuer" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="samlServiceProvider"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Service Provider</FormLabel>
+                          <FormControl>
+                            <Input {...field} readOnly disabled className="bg-muted" />
+                          </FormControl>
+                          <FormDescription>The SAML Service Provider name.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="samlIssuer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Service Provider Entity ID (Issuer)</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <Input {...field} placeholder="urn:skillmine:meeting-room-booking" data-testid="input-saml-issuer" />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => copyToClipboard(field.value || "urn:skillmine:meeting-room-booking")}
+                              title="Copy to clipboard"
+                            >
+                              {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          <FormDescription>Your application's unique SAML identifier.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="samlIdpIssuer"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Identity Provider Entity ID (Issuer)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://skillmine.example.com/adfs/services/trust" data-testid="input-saml-idp-issuer" />
+                        </FormControl>
+                        <FormDescription>The identifier for your SAML Identity Provider (Okta, Azure, etc.)</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="samlEntryPoint"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>SAML Entry Point (SSO URL)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://skillmine.example.com/adfs/ls/" data-testid="input-saml-entry-point" />
+                        </FormControl>
+                        <FormDescription>The URL where the SAML authentication request will be sent.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="samlLogoutUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>SAML Logout URL</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="https://skillmine.example.com/adfs/ls/?wa=wsignout1.0" data-testid="input-saml-logout-url" />
+                        </FormControl>
+                        <FormDescription>The URL where the SAML logout request will be sent.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
               <FormField
                 control={form.control}
@@ -200,15 +335,37 @@ export default function SsoSettings() {
                     {window.location.origin}/api/auth/saml/metadata
                   </code>
                 </div>
-              </div>
-            </CardContent>
+              </CardContent>
+            )}
           </Card>
 
+          <AlertDialog open={showDisableConfirm} onOpenChange={setShowDisableConfirm}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <div className="flex items-center gap-2 text-destructive mb-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  This will disable SAML authentication for all users and <strong>permanently clear</strong> all your current SAML configuration settings. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmDisableSso} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Yes, Disable and Clear Data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           <div className="flex justify-end">
-            <Button type="submit" disabled={mutation.isPending} data-testid="button-save-sso">
-              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save SSO Settings
-            </Button>
+            {form.watch("enableSso") && (
+              <Button type="submit" disabled={mutation.isPending} data-testid="button-save-sso">
+                {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save SSO Settings
+              </Button>
+            )}
           </div>
         </form>
       </Form>

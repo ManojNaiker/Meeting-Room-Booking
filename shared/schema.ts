@@ -110,9 +110,12 @@ export const emailSettings = pgTable("email_settings", {
   ldapSearchFilter: varchar("ldap_search_filter").default("(mail=*)"),
   // SSO SAML Settings (Skillmine)
   enableSso: boolean("enable_sso").default(false),
+  samlJitEnabled: boolean("saml_jit_enabled").default(true),
   samlEntryPoint: varchar("saml_entry_point"),
   samlIssuer: varchar("saml_issuer"),
+  samlIdpIssuer: varchar("saml_idp_issuer"),
   samlCert: text("saml_cert"),
+  samlLogoutUrl: varchar("saml_logout_url"),
   samlServiceProvider: varchar("saml_service_provider").default("Skillmine"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
