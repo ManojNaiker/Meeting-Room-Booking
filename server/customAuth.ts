@@ -48,10 +48,9 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Initialize SAML strategy if enabled
   const emailSettings = await storage.getEmailSettings();
   if (emailSettings?.enableSso && emailSettings.samlEntryPoint) {
-    console.log("[SAML] Configuring SAML Strategy with Skillmine...");
+    console.log("[SAML] Configuring SAML Strategy...");
     const samlStrategy = new SamlStrategy(
       {
         callbackUrl: "/api/auth/saml/callback",
@@ -86,18 +85,6 @@ export async function setupAuth(app: Express) {
                 profileImageUrl: null,
               });
             }
-          })();
-        },
-        (profile: any, done: any) => {
-          return done(null, profile);
-        }
-      );
-      passport.use("saml", samlStrategy as any);
-      return samlStrategy;
-    }
-    return null;
-  };
-
             return done(null, user);
           } catch (err) {
             return done(err);
@@ -110,12 +97,10 @@ export async function setupAuth(app: Express) {
     );
     passport.use("saml", samlStrategy as any);
 
-    // SAML routes
     app.get("/api/auth/saml/login", (req, res) => {
       if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
         return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
       }
-      // Direct redirect to the SSO provider
       res.redirect("https://lmplauth-sso.lightfinance.com/");
     });
 
@@ -125,12 +110,9 @@ export async function setupAuth(app: Express) {
         if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
           return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
         }
-        // Since we are redirecting externally, we need to ensure the callback
-        // still uses the SAML strategy for validation if the provider posts back here.
         passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false })(req, res, next);
       },
       async (req: any, res) => {
-        // Create session compatible with existing auth
         req.session.user = {
           id: req.user.id,
           email: req.user.email,
@@ -145,60 +127,9 @@ export async function setupAuth(app: Express) {
           details: { email: req.user.email, method: 'saml' },
         });
 
-  // SAML routes (Registered statically to avoid 404s)
-  console.log("[SAML] Registering static SAML routes...");
-  
-  app.get("/api/auth/saml/login", async (req, res, next) => {
-    console.log("[SAML] Hit login route");
-    const strategy = await configureSamlStrategy(req);
-    if (!strategy) {
-      return res.status(400).json({ message: "SAML is not configured or enabled" });
-    }
-    passport.authenticate("saml")(req, res, next);
-  });
-  
-  app.post(
-    "/api/auth/saml/callback",
-    async (req, res, next) => {
-      const strategy = await configureSamlStrategy(req);
-      if (!strategy) {
-        return res.status(400).json({ message: "SAML is not configured or enabled" });
+        res.redirect("/");
       }
-      next();
-    },
-    passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
-    async (req: any, res) => {
-      // Create session compatible with existing auth
-      req.session.user = {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role,
-      };
-      
-      await storage.createAuditLog({
-        userId: req.user.id,
-        action: 'login',
-        resourceType: 'user',
-        resourceId: req.user.id,
-        details: { email: req.user.email, method: 'saml' },
-      });
-
-      res.redirect("/");
-    }
-  );
-
-  app.get("/api/auth/saml/metadata", async (req, res) => {
-    console.log(`[SAML] Hit metadata route: ${req.method} ${req.url}`);
-    const strategy = await configureSamlStrategy(req);
-    if (!strategy) {
-      return res.status(400).json({ message: "SAML is not configured or enabled" });
-    }
-    const settings = await storage.getEmailSettings();
-    res.type("application/xml");
-    res.status(200).send(
-      strategy.generateServiceProviderMetadata(settings?.samlCert || "")
     );
-  });
 
     app.get("/api/auth/saml/metadata", (req, res) => {
       if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
@@ -210,7 +141,6 @@ export async function setupAuth(app: Express) {
       );
     });
   } else {
-    // Fallback routes for when SAML is not configured
     app.get(["/api/auth/saml/login", "/api/auth/saml/metadata"], (req, res) => {
       res.status(404).json({ message: "SAML SSO is not configured or enabled." });
     });
@@ -219,7 +149,6 @@ export async function setupAuth(app: Express) {
     });
   }
 
-  // Custom login endpoint
   app.post('/api/auth/login', async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -228,33 +157,28 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email and password are required" });
       }
 
-      // Find user by email
       const user = await storage.getUserByEmail(email);
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Check password
       const isValid = await bcrypt.compare(password, user.passwordHash || "");
       if (!isValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Check if user is activated (except for admin users created before activation system)
       if (user.isActivated === false && user.role !== 'admin') {
         return res.status(403).json({ 
           message: "Please activate your account using the link sent to your email before logging in" 
         });
       }
 
-      // Create session
       (req.session as any).user = {
         id: user.id,
         email: user.email,
         role: user.role,
       };
 
-      // Log successful login
       await storage.createAuditLog({
         userId: user.id,
         action: 'login',
@@ -277,7 +201,6 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Logout endpoint
   app.post('/api/auth/logout', (req, res) => {
     req.session.destroy((err) => {
       if (err) {
@@ -286,10 +209,6 @@ export async function setupAuth(app: Express) {
       res.json({ message: "Logged out successfully" });
     });
   });
-
-
-
-
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
@@ -299,7 +218,6 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Attach user to request for use in other routes
   req.user = user;
   next();
 };

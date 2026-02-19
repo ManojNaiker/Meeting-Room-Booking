@@ -288,21 +288,7 @@ export default function SsoSettings() {
                       </FormItem>
                     )}
                   />
-
-              <FormField
-                control={form.control}
-                name="samlEntryPoint"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SAML Entry Point (SSO URL)</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="https://skillmine.example.com/adfs/ls/" data-testid="input-saml-entry-point" />
-                    </FormControl>
-                    <FormDescription>The URL where the SAML authentication request will be sent.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                </div>
 
               <FormField
                 control={form.control}
@@ -335,6 +321,7 @@ export default function SsoSettings() {
                     {window.location.origin}/api/auth/saml/metadata
                   </code>
                 </div>
+              </div>
               </CardContent>
             )}
           </Card>
