@@ -43,7 +43,9 @@ export default function NotificationDropdown() {
       if (!response.ok) {
         throw new Error('Failed to fetch notifications');
       }
-      return response.json();
+      const data = await response.json();
+      // Ensure data is an array
+      return Array.isArray(data) ? data : [];
     },
   });
 

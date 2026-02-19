@@ -52,6 +52,7 @@ export const rooms = pgTable("rooms", {
   imageUrl: varchar("image_url"),
   equipment: jsonb("equipment").default("[]"), // Array of equipment strings
   isActive: boolean("is_active").default(true),
+  restrictedUsers: jsonb("restricted_users").default("[]"), // Array of user IDs who can book this room
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -73,6 +74,7 @@ export const bookings = pgTable("bookings", {
   remindMe: boolean("remind_me").default(false),
   reminderTime: integer("reminder_time").default(15), // minutes before
   reminderSent: boolean("reminder_sent").default(false),
+  calendarUid: varchar("calendar_uid"),
   status: varchar("status").default("confirmed"), // confirmed, cancelled, pending
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -214,6 +216,8 @@ export const insertRoomSchema = createInsertSchema(rooms).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  restrictedUsers: z.array(z.string()).default([]),
 });
 
 export const insertBookingSchema = createInsertSchema(bookings).omit({
@@ -244,6 +248,11 @@ export const insertEmailSettingsSchema = createInsertSchema(emailSettings).omit(
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  smtpPort: z.preprocess((val) => parseInt(String(val), 10), z.number()),
+  samlCert: z.string().optional().nullable(),
+  samlIssuer: z.string().optional().nullable(),
+  samlEntryPoint: z.string().optional().nullable(),
 });
 
 export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({

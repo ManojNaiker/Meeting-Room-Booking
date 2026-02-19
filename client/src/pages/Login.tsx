@@ -139,7 +139,14 @@ export default function Login() {
                 type="button"
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={() => window.location.href = "/api/auth/saml/login"}
+                onClick={() => {
+                  const ssoUrl = "https://lmplauth-sso.lightfinance.com/";
+                  const newWindow = window.open(ssoUrl, "_blank", "noopener,noreferrer");
+                  if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    // If popup is blocked, fall back to same-window redirect
+                    window.location.href = ssoUrl;
+                  }
+                }}
                 data-testid="button-sso-login"
               >
                 <ShieldCheck className="h-4 w-4 text-primary" />

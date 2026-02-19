@@ -123,7 +123,7 @@ export default function Analytics() {
     ],
   };
 
-  const data = analyticsData || mockData;
+  const data = analyticsData;
 
   const formatChange = (value: number) => {
     const isPositive = value > 0;
@@ -139,6 +139,7 @@ export default function Analytics() {
   };
 
   const exportData = () => {
+    if (!data) return;
     const csvData = [
       ['Date', 'Bookings', 'Duration'],
       ...data.bookingTrends.map(item => [item.date, item.bookings, item.duration])
@@ -154,7 +155,7 @@ export default function Analytics() {
     window.URL.revokeObjectURL(url);
   };
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <div className="p-6">
         <div className="animate-pulse">

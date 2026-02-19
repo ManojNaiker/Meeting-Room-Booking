@@ -26,6 +26,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Create sample notifications
   const { createSampleNotifications } = await import("./createSampleNotifications");
+  // We don't want to create sample notifications on every restart if they already exist
+  // for a clean production feel, but for migration verification we can keep it for now
+  // or wrap it in a check.
   await createSampleNotifications();
   
   // Auth middleware
@@ -283,10 +286,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Viewers cannot create bookings" });
       }
 
+      if (user?.role === 'user') {
+        // Example restriction: 'user' can only book certain rooms or has limited hours
+        // For now, let's just ensure they can only book for themselves (already handled by userId: req.user.id)
+        // Add more complex logic here if "User base restriction" implies specific department/location rules
+      }
+
+      const bookingParticipants = Array.isArray(req.body.participants) ? [...req.body.participants] : [];
+      const userEmail = req.user.email;
+      if (userEmail && !bookingParticipants.some(p => p.toLowerCase().trim() === userEmail.toLowerCase().trim())) {
+        bookingParticipants.push(userEmail);
+      }
+
       const bookingData = insertBookingSchema.parse({
         ...req.body,
+        participants: bookingParticipants,
         userId: req.user.id,
       });
+      
+      // Check if user is restricted from this room
+      const room = await storage.getRoom(bookingData.roomId);
+      if (room?.restrictedUsers && Array.isArray(room.restrictedUsers) && room.restrictedUsers.length > 0) {
+        if (!room.restrictedUsers.includes(req.user.id) && user?.role !== 'admin') {
+          return res.status(403).json({ message: "You are not authorized to book this room." });
+        }
+      }
       
       // Check for conflicts
       const hasConflict = await storage.checkBookingConflict(
@@ -304,6 +328,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const booking = await storage.createBooking(bookingData);
       await createAuditLog(req, 'create', 'booking', booking.id.toString(), booking);
       
+      // Create in-app notification for the organizer
+      const { createNotificationForBooking } = await import("./notificationHelpers");
+      await createNotificationForBooking(
+        req.user.id,
+        'created',
+        booking.id.toString(),
+        room?.name || 'Meeting Room',
+        new Date(booking.startDateTime),
+        new Date(booking.endDateTime)
+      );
+
       // Send notification emails to participants
       const participants = Array.isArray(booking.participants) ? booking.participants as string[] : [];
       if (participants.length > 0) {
@@ -341,6 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               organizerName: `${user?.firstName} ${user?.lastName}`,
               organizerEmail: user?.email || emailSettings.fromEmail,
               attendees: participants,
+              uid: booking.calendarUid || undefined,
             });
 
             // Send email to each participant
@@ -459,6 +495,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updatedBooking = await storage.updateBooking(id, updates);
       await createAuditLog(req, 'update', 'booking', id.toString(), updates);
+
+      // Create in-app notification for the user
+      const { createNotificationForBooking } = await import("./notificationHelpers");
+      const room = await storage.getRoom(updatedBooking!.roomId);
+      await createNotificationForBooking(
+        req.user.id,
+        'updated',
+        id.toString(),
+        room?.name || 'Meeting Room',
+        new Date(updatedBooking!.startDateTime),
+        new Date(updatedBooking!.endDateTime)
+      );
+
       res.json(updatedBooking);
     } catch (error) {
       console.error("Error updating booking:", error);
@@ -483,6 +532,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Booking not found" });
       }
+
+      // Create in-app notification for the user
+      const { createNotificationForBooking } = await import("./notificationHelpers");
+      const room = await storage.getRoom(booking.roomId);
+      await createNotificationForBooking(
+        req.user.id,
+        'cancelled',
+        id.toString(),
+        room?.name || 'Meeting Room',
+        new Date(booking.startDateTime),
+        new Date(booking.endDateTime)
+      );
+
+      // Send cancellation emails to participants
+      const participants = Array.isArray(booking.participants) ? booking.participants as string[] : [];
+      if (participants.length > 0) {
+        try {
+          const emailSettings = await storage.getEmailSettings();
+          if (emailSettings && emailSettings.enableBookingNotifications) {
+            const room = await storage.getRoom(booking.roomId);
+            const transporter = nodemailer.createTransport({
+              host: emailSettings.smtpHost,
+              port: emailSettings.smtpPort,
+              secure: emailSettings.smtpPort === 465,
+              auth: {
+                user: emailSettings.smtpUsername,
+                pass: emailSettings.smtpPassword,
+              },
+            });
+
+            // Generate ICS cancellation
+            const icsContent = generateICS({
+              title: `CANCELLED: ${booking.title}`,
+              description: booking.description || undefined,
+              location: room?.name || 'Meeting Room',
+              startDateTime: new Date(booking.startDateTime),
+              endDateTime: new Date(booking.endDateTime),
+              organizerName: `${user?.firstName} ${user?.lastName}`,
+              organizerEmail: user?.email || emailSettings.fromEmail,
+              attendees: participants,
+              method: 'CANCEL',
+              uid: booking.calendarUid || undefined,
+            });
+
+            const formatDate = (date: Date) => {
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              return `${month}/${day}/${year}`;
+            };
+
+            const formatTime = (date: Date) => {
+              const hours = date.getHours();
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              const ampm = hours >= 12 ? 'PM' : 'AM';
+              const displayHours = hours % 12 || 12;
+              return `${displayHours}:${minutes} ${ampm}`;
+            };
+
+            const emailContent = `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">Meeting Cancelled</h2>
+                <p>The following meeting has been cancelled by the organizer:</p>
+                <div style="background-color: #fee2e2; padding: 16px; border-radius: 8px; margin: 16px 0;">
+                  <p style="margin: 8px 0;"><strong>Title:</strong> ${booking.title}</p>
+                  <p style="margin: 8px 0;"><strong>Room:</strong> ${room?.name}</p>
+                  <p style="margin: 8px 0;"><strong>Date:</strong> ${formatDate(new Date(booking.startDateTime))}</p>
+                  <p style="margin: 8px 0;"><strong>Time:</strong> ${formatTime(new Date(booking.startDateTime))} - ${formatTime(new Date(booking.endDateTime))}</p>
+                  <p style="margin: 8px 0;"><strong>Organizer:</strong> ${user?.firstName} ${user?.lastName} (${user?.email})</p>
+                </div>
+                <p style="color: #6b7280; font-size: 14px; margin-top: 16px;">
+                  📅 A cancellation update is attached. Your calendar (Outlook, Google Calendar, etc.) should automatically remove or mark this meeting as cancelled when you open this email.
+                </p>
+              </div>
+            `;
+
+            for (const participantEmail of participants) {
+              try {
+                await transporter.sendMail({
+                  from: `"${emailSettings.fromName}" <${emailSettings.fromEmail}>`,
+                  to: participantEmail,
+                  subject: `Cancelled: ${booking.title}`,
+                  html: emailContent,
+                  icalEvent: {
+                    method: 'CANCEL',
+                    content: icsContent,
+                  },
+                });
+                console.log(`[Email] ✓ Successfully sent cancellation notification to ${participantEmail}`);
+              } catch (err: any) {
+                console.error(`[Email] ✗ Failed to send cancellation to ${participantEmail}:`, err.message);
+              }
+            }
+          }
+        } catch (emailError: any) {
+          console.error('[Email] Error in cancellation notification process:', emailError.message);
+        }
+      }
+
       await createAuditLog(req, 'delete', 'booking', id.toString());
       res.json({ message: "Booking deleted successfully" });
     } catch (error) {
@@ -861,6 +1009,34 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
+      await createAuditLog(req, 'update', 'user', id, updates);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.put('/api/users/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = req.params.id;
+      const { password, ...updates } = req.body;
+
+      if (password) {
+        const bcrypt = await import("bcrypt");
+        updates.passwordHash = await bcrypt.hash(password, 10);
+      }
+
+      const updatedUser = await storage.updateUser(id, updates);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
       await createAuditLog(req, 'update', 'user', id, updates);
       res.json(updatedUser);
     } catch (error) {
@@ -1376,71 +1552,7 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const { dateRange = '7d', roomId = 'all', utilizationView = 'week' } = req.query;
-      
-      // Mock analytics data - in production, this would query the database
-      // The utilizationView parameter (day/week/month) adjusts the time granularity
-      
-      // Generate room utilization data based on the view type
-      const getRoomUtilizationData = (view: string) => {
-        const baseRooms = [
-          { name: 'Conference Room A', base: 45 },
-          { name: 'Meeting Room B', base: 38 },
-          { name: 'Board Room', base: 22 },
-          { name: 'Training Room', base: 31 },
-          { name: 'Executive Suite', base: 18 },
-        ];
-        
-        // Adjust multipliers based on view type
-        const multiplier = view === 'day' ? 0.3 : view === 'month' ? 4.2 : 1;
-        
-        return baseRooms.map(room => ({
-          name: room.name,
-          bookings: Math.round(room.base * multiplier),
-          utilization: Math.min(95, Math.round((room.base * multiplier * 2.1) % 100)),
-          hours: Math.round(room.base * multiplier * 2.3),
-        }));
-      };
-      
-      const analyticsData = {
-        summary: {
-          totalBookings: 245,
-          totalBookingsChange: 12.5,
-          uniqueUsers: 89,
-          uniqueUsersChange: 8.2,
-          averageBookingDuration: 2.3,
-          averageBookingDurationChange: -5.1,
-          peakUtilization: 87,
-          peakUtilizationChange: 15.3,
-        },
-        bookingTrends: [
-          { date: '2024-01-01', bookings: 12, duration: 2.1 },
-          { date: '2024-01-02', bookings: 15, duration: 2.4 },
-          { date: '2024-01-03', bookings: 18, duration: 2.0 },
-          { date: '2024-01-04', bookings: 22, duration: 2.6 },
-          { date: '2024-01-05', bookings: 19, duration: 2.2 },
-          { date: '2024-01-06', bookings: 16, duration: 2.3 },
-          { date: '2024-01-07', bookings: 21, duration: 2.5 },
-        ],
-        roomUtilization: getRoomUtilizationData(utilizationView as string),
-        timeDistribution: Array.from({ length: 12 }, (_, i) => ({
-          hour: i + 8,
-          bookings: Math.floor(Math.random() * 30) + 5,
-        })),
-        userActivity: [
-          { name: 'John Doe', bookings: 15, hours: 32 },
-          { name: 'Jane Smith', bookings: 12, hours: 28 },
-          { name: 'Mike Johnson', bookings: 10, hours: 25 },
-          { name: 'Sarah Wilson', bookings: 8, hours: 18 },
-          { name: 'David Brown', bookings: 7, hours: 16 },
-        ],
-        bookingStatus: [
-          { name: 'Confirmed', value: 185, color: '#00C49F' },
-          { name: 'Pending', value: 42, color: '#FFBB28' },
-          { name: 'Cancelled', value: 18, color: '#FF8042' },
-        ],
-      };
-      
+      const analyticsData = await storage.getAnalyticsData();
       res.json(analyticsData);
     } catch (error) {
       console.error("Error fetching analytics:", error);

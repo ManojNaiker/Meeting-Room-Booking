@@ -74,6 +74,23 @@ export default function UserManagement() {
     },
   });
 
+  const [userToEdit, setUserToEdit] = useState<any>(null);
+
+  const editForm = useForm<z.infer<typeof createUserSchema>>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: {
+      employeeCode: "",
+      email: "",
+      firstName: "",
+      lastName: "",
+      designation: "",
+      department: "",
+      role: "user",
+      password: "",
+      autoGeneratePassword: false,
+    },
+  });
+
   const { data: users = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/users'],
   });
@@ -230,6 +247,16 @@ export default function UserManagement() {
     if (userToDelete) {
       deleteUserMutation.mutate(userToDelete.id);
       setUserToDelete(null);
+    }
+  };
+
+  const onEditSubmit = (data: z.infer<typeof createUserSchema>) => {
+    if (userToEdit) {
+      updateUserMutation.mutate({
+        id: userToEdit.id,
+        updates: data
+      });
+      setUserToEdit(null);
     }
   };
 
@@ -748,6 +775,20 @@ export default function UserManagement() {
                             variant="outline"
                             size="sm"
                             disabled={updateUserMutation.isPending}
+                            onClick={() => {
+                              setUserToEdit(user);
+                              editForm.reset({
+                                employeeCode: user.employeeCode || "",
+                                email: user.email,
+                                firstName: user.firstName || "",
+                                lastName: user.lastName || "",
+                                designation: user.designation || "",
+                                department: user.department || "",
+                                role: user.role,
+                                password: "",
+                                autoGeneratePassword: false,
+                              });
+                            }}
                           >
                             <Edit className="w-4 h-4 mr-2" />
                             Edit
@@ -773,6 +814,152 @@ export default function UserManagement() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!userToEdit} onOpenChange={(open) => !open && setUserToEdit(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="employeeCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Employee Code (Optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="EMP001" {...field} data-testid="edit-input-employee-code" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John" {...field} data-testid="edit-input-first-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Doe" {...field} data-testid="edit-input-last-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={editForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email ID</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="john.doe@company.com" {...field} data-testid="edit-input-email" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={editForm.control}
+                  name="designation"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Designation (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Senior Developer" {...field} data-testid="edit-input-designation" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="department"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Engineering" {...field} data-testid="edit-input-department" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={editForm.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="viewer">Viewer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New Password (Leave blank to keep current)</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="••••••••" {...field} data-testid="edit-input-password" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-2 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setUserToEdit(null)}
+                  data-testid="button-cancel-edit"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit"
+                  disabled={updateUserMutation.isPending}
+                  data-testid="button-save-user"
+                >
+                  {updateUserMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Professional Delete Confirmation Dialog */}
       <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
