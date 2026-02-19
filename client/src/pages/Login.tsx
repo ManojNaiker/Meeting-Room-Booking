@@ -51,14 +51,14 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="mx-auto flex items-center justify-center">
-            <img 
-              src={lightLogo} 
-              alt="Light Finance Logo" 
+            <img
+              src={lightLogo}
+              alt="Light Finance Logo"
               className="h-16 w-auto object-contain"
             />
           </div>
         </div>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Meeting Room Booking</CardTitle>
@@ -74,7 +74,7 @@ export default function Login() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -140,12 +140,7 @@ export default function Login() {
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
                 onClick={() => {
-                  const ssoUrl = "https://lmplauth-sso.lightfinance.com/";
-                  const newWindow = window.open(ssoUrl, "_blank", "noopener,noreferrer");
-                  if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                    // If popup is blocked, fall back to same-window redirect
-                    window.location.href = ssoUrl;
-                  }
+                  window.location.href = "/api/auth/saml/login";
                 }}
                 data-testid="button-sso-login"
               >

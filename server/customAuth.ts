@@ -138,14 +138,39 @@ export async function setupAuth(app: Express) {
   app.post(
     "/api/auth/saml/callback",
     async (req, res, next) => {
+      console.log(`[SAML] Callback received: ${req.method} ${req.originalUrl}`);
       const strategy = await configureSamlStrategy(req);
       if (!strategy) {
+        console.error("[SAML] Strategy not found in callback");
         return res.status(400).json({ message: "SAML is not configured or enabled" });
       }
       next();
     },
-    passport.authenticate("saml", { failureRedirect: "/login", failureFlash: false }),
+    (req, res, next) => {
+      passport.authenticate("saml", (err: any, user: any, info: any) => {
+        if (err) {
+          console.error("[SAML] Passport error:", err);
+          return res.status(500).json({ message: "SAML Auth Error", details: err.message });
+        }
+        if (!user) {
+          console.warn("[SAML] Auth failed:", info);
+          return res.status(401).json({ 
+            message: info?.message || "SAML Authentication failed",
+            details: info
+          });
+        }
+        
+        req.logIn(user, (loginErr) => {
+          if (loginErr) {
+            console.error("[SAML] req.logIn error:", loginErr);
+            return res.status(500).json({ message: "Session login failed" });
+          }
+          next();
+        });
+      })(req, res, next);
+    },
     async (req: any, res) => {
+      console.log("[SAML] Login successful for user:", req.user.email);
       // Create session compatible with existing auth
       req.session.user = {
         id: req.user.id,
