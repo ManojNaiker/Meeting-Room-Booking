@@ -289,26 +289,22 @@ export default function SsoSettings() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="samlCert"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Public X.509 Certificate</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                            className="font-mono h-32"
-                            data-testid="textarea-saml-cert"
-                          />
-                        </FormControl>
-                        <FormDescription>The public certificate provided by Skillmine for signature verification.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <FormField
+                control={form.control}
+                name="samlEntryPoint"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SAML Entry Point (SSO URL)</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="https://skillmine.example.com/adfs/ls/" data-testid="input-saml-entry-point" />
+                    </FormControl>
+                    <FormDescription>The URL where the SAML authentication request will be sent.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
+<<<<<<< HEAD
                   <div className="rounded-md bg-muted p-4 flex items-start space-x-3 mt-4">
                     <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
                     <div className="text-sm">
@@ -321,6 +317,38 @@ export default function SsoSettings() {
                       </code>
                     </div>
                   </div>
+=======
+              <FormField
+                control={form.control}
+                name="samlCert"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Public X.509 Certificate</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        {...field} 
+                        placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" 
+                        className="font-mono h-32"
+                        data-testid="textarea-saml-cert"
+                      />
+                    </FormControl>
+                    <FormDescription>The public certificate provided by Skillmine for signature verification.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="rounded-md bg-muted p-4 flex items-start space-x-3 mt-4">
+                <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium">Metadata URL</p>
+                  <p className="text-muted-foreground mt-1">
+                    Provide this URL to Skillmine to complete the trust relationship:
+                  </p>
+                  <code className="block mt-2 p-2 bg-background rounded border text-xs break-all">
+                    {window.location.origin}/api/auth/saml/metadata
+                  </code>
+>>>>>>> c8743c50d765ff16e1f16f87c71722d735443efe
                 </div>
               </CardContent>
             )}
