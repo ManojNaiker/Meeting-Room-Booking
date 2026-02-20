@@ -75,6 +75,7 @@ export async function setupAuth(app: Express) {
           logoutCallbackUrl,
           wantAssertionsSigned: true,
           wantAuthnResponseSigned: false, // Most IdPs only sign assertions
+          acceptedClockSkewMs: 60000, // 1 minute buffer for clock skew
         },
         (profile: any, done: any) => {
           const email = profile.email || profile.nameID || profile["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"];
@@ -104,8 +105,16 @@ export async function setupAuth(app: Express) {
                 });
               }
 
-              return done(null, user);
-            } catch (err) {
+                // Add SAML identifiers to the user object so they are available in req.user
+                const userWithSaml = {
+                  ...user,
+                  nameID: profile.nameID,
+                  nameIDFormat: profile.nameIDFormat,
+                  sessionIndex: profile.sessionIndex,
+                };
+
+                return done(null, userWithSaml);
+              } catch (err) {
               return done(err);
             }
           })();
@@ -171,12 +180,16 @@ export async function setupAuth(app: Express) {
     },
     async (req: any, res) => {
       console.log("[SAML] Login successful for user:", req.user.email);
-      // Create session compatible with existing auth
-      req.session.user = {
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role,
-      };
+        // Create session compatible with existing auth and store SAML identifiers for SLO
+        (req.session as any).user = {
+          id: req.user.id,
+          email: req.user.email,
+          role: req.user.role,
+          authMethod: 'saml',
+          samlNameID: req.user.nameID,
+          samlNameIDFormat: req.user.nameIDFormat,
+          samlSessionIndex: req.user.sessionIndex,
+        };
       
       await storage.createAuditLog({
         userId: req.user.id,
@@ -202,26 +215,28 @@ export async function setupAuth(app: Express) {
       strategy.generateServiceProviderMetadata(settings?.samlCert || "")
     );
   });
-
-    app.get("/api/auth/saml/metadata", (req, res) => {
-      if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
-        return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
-      }
-      res.type("application/xml");
-      res.status(200).send(
-        samlStrategy.generateServiceProviderMetadata(emailSettings.samlCert || "")
-      );
-    });
-  } else {
-    app.get(["/api/auth/saml/login", "/api/auth/saml/metadata"], (req, res) => {
-      res.status(404).json({ message: "SAML SSO is not configured or enabled." });
   // SAML Logout routes
   app.get("/api/auth/saml/logout", async (req: any, res) => {
     const strategy = await configureSamlStrategy(req);
     const settings = await storage.getEmailSettings();
+    const sessionUser = (req.session as any).user;
+
+    console.log(`[SAML] Initiating SLO for user: ${sessionUser?.email}`);
+    console.log(`[SAML] Session identifiers - NameID: ${sessionUser?.samlNameID}, SessionIndex: ${sessionUser?.samlSessionIndex}`);
+
     if (strategy && settings?.samlLogoutUrl) {
+      if (req.user && sessionUser) {
+        req.user.nameID = sessionUser.samlNameID;
+        req.user.nameIDFormat = sessionUser.samlNameIDFormat;
+        req.user.sessionIndex = sessionUser.samlSessionIndex;
+      }
+      
       strategy.logout(req, (err, url) => {
-        if (err) return res.status(500).json({ message: "Logout failed" });
+        if (err) {
+          console.error("[SAML] Logout generation failed:", err);
+          return res.status(500).json({ message: "Logout failed" });
+        }
+        console.log(`[SAML] Redirecting to IdP logout: ${url}`);
         res.redirect(url || "/login");
       });
     } else {
@@ -268,6 +283,7 @@ export async function setupAuth(app: Express) {
         id: user.id,
         email: user.email,
         role: user.role,
+        authMethod: 'local',
       };
 
       await storage.createAuditLog({

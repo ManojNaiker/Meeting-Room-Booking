@@ -320,40 +320,42 @@ export default function SsoSettings() {
                         {window.location.origin}/api/auth/saml/metadata
                       </code>
                     </div>
-                  </CardContent>
-            )}
-                </Card>
-
-                <AlertDialog open={showDisableConfirm} onOpenChange={setShowDisableConfirm}>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <div className="flex items-center gap-2 text-destructive mb-2">
-                        <AlertTriangle className="h-5 w-5" />
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      </div>
-                      <AlertDialogDescription>
-                        This will disable SAML authentication for all users and <strong>permanently clear</strong> all your current SAML configuration settings. This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={confirmDisableSso} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        Yes, Disable and Clear Data
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-
-                <div className="flex justify-end">
-                  {form.watch("enableSso") && (
-                    <Button type="submit" disabled={mutation.isPending} data-testid="button-save-sso">
-                      {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Save SSO Settings
-                    </Button>
-                  )}
+                  </div>
                 </div>
-              </form>
+              </CardContent>
+            )}
+          </Card>
+
+          <AlertDialog open={showDisableConfirm} onOpenChange={setShowDisableConfirm}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <div className="flex items-center gap-2 text-destructive mb-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                </div>
+                <AlertDialogDescription>
+                  This will disable SAML authentication for all users and <strong>permanently clear</strong> all your current SAML configuration settings. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmDisableSso} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Yes, Disable and Clear Data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <div className="flex justify-end">
+            {form.watch("enableSso") && (
+              <Button type="submit" disabled={mutation.isPending} data-testid="button-save-sso">
+                {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save SSO Settings
+              </Button>
+            )}
+          </div>
+        </form>
       </Form>
-        </div>
-        );
+    </div>
+  );
 }

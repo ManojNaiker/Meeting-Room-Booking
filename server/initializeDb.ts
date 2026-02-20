@@ -28,16 +28,12 @@ export async function initializeDatabase() {
       console.log("Admin user already exists");
     }
     
-    // Remove all existing rooms and create new default rooms
+    // Check if rooms already exist
     const existingRooms = await storage.getAllRooms();
     
-    // Delete all existing rooms
-    if (existingRooms.length > 0) {
-      for (const room of existingRooms) {
-        await storage.deleteRoom(room.id);
-      }
-      console.log(`Removed ${existingRooms.length} existing room(s)`);
-    }
+    // Only create rooms if none exist
+    if (existingRooms.length === 0) {
+      console.log("No rooms found, creating default rooms...");
     
     // Create new default rooms based on the provided list
     const defaultRooms = [
@@ -47,6 +43,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "mic-speaker", "camera", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Vega",
@@ -54,6 +51,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Radiant",
@@ -61,6 +59,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Spectrum",
@@ -68,6 +67,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Nova",
@@ -75,6 +75,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Starlight",
@@ -82,6 +83,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Spark",
@@ -89,6 +91,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Flash",
@@ -96,6 +99,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "mic-speaker", "camera", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Harmony",
@@ -103,6 +107,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Dawn",
@@ -110,6 +115,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Ray",
@@ -117,6 +123,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Beam",
@@ -124,6 +131,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Zenith",
@@ -131,6 +139,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Eclipse",
@@ -138,6 +147,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Glow",
@@ -145,6 +155,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Orbit",
@@ -152,6 +163,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Sunshine",
@@ -159,6 +171,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["tv", "telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
       {
         name: "Firefly",
@@ -166,6 +179,7 @@ export async function initializeDatabase() {
         description: "",
         equipment: ["telephone", "whiteboard"],
         isActive: true,
+        restrictedUsers: [],
       },
     ];
     
@@ -173,7 +187,7 @@ export async function initializeDatabase() {
       await storage.createRoom(room);
     }
     
-    console.log(`Created ${defaultRooms.length} new default rooms`);
+    }
     
     return existingAdmin;
   } catch (error) {

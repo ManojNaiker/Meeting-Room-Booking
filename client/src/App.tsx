@@ -39,13 +39,14 @@ function Router() {
       {!isAuthenticated ? (
         <>
           <Route path="/" component={Login} />
+          <Route path="/login" component={Login} />
           <Route path="/forgot-password" component={ForgotPassword} />
           <Route path="/reset-password" component={ResetPassword} />
         </>
       ) : (
         <Route path="/" component={Home} />
       )}
-      
+
       {isAuthenticated && (
         <>
           <Route path="/dashboard">
@@ -100,7 +101,7 @@ function Router() {
           </Route>
         </>
       )}
-      
+
       <Route component={NotFound} />
     </Switch>
   );
