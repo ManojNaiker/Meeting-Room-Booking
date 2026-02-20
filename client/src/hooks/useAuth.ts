@@ -12,6 +12,7 @@ export interface User {
   profileImageUrl?: string;
   isActivated?: boolean;
   mustChangePassword?: boolean;
+  authMethod?: "local" | "saml";
 }
 
 export function useAuth() {

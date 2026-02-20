@@ -17,13 +17,13 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
-import { 
-  Calendar, 
-  CalendarPlus, 
-  LayoutDashboard, 
-  List, 
-  Users, 
-  DoorOpen, 
+import {
+  Calendar,
+  CalendarPlus,
+  LayoutDashboard,
+  List,
+  Users,
+  DoorOpen,
   ClipboardList,
   Bell,
   Settings,
@@ -96,10 +96,19 @@ export default function Layout({ children }: LayoutProps) {
     },
   });
 
+  const handleLogout = () => {
+    trackAction('logout', 'user', user?.id, { page: location });
+    if (user?.authMethod === 'saml') {
+      window.location.href = "/api/auth/saml/logout";
+    } else {
+      logoutMutation.mutate();
+    }
+  };
+
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest("/api/auth/logout", { method: "POST" }),
     onSuccess: () => {
-      window.location.href = "/";
+      window.location.href = "/login";
     },
   });
 
@@ -182,14 +191,14 @@ export default function Layout({ children }: LayoutProps) {
     <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
-      
+
       {/* Sidebar */}
-      <div 
+      <div
         id="mobile-sidebar"
         className={`
           w-64 bg-white dark:bg-slate-800 shadow-lg border-r border-gray-200 dark:border-slate-700 flex flex-col
@@ -200,9 +209,9 @@ export default function Layout({ children }: LayoutProps) {
         {/* Logo */}
         <div className="p-6 border-b border-gray-200 dark:border-slate-700">
           <div className="flex items-center justify-center">
-            <img 
-              src={lightLogo} 
-              alt="Light Finance Logo" 
+            <img
+              src={lightLogo}
+              alt="Light Finance Logo"
               className="h-12 w-auto object-contain"
             />
           </div>
@@ -219,11 +228,10 @@ export default function Layout({ children }: LayoutProps) {
                   navigate(item.href);
                   trackNavigation(item.name, { href: item.href, section: 'main-navigation' });
                 }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                  isCurrentPage(item.href)
-                    ? 'text-primary bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                }`}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-colors ${isCurrentPage(item.href)
+                  ? 'text-primary bg-blue-50 dark:bg-blue-900/20'
+                  : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  }`}
               >
                 <Icon className="w-5 h-5" />
                 <span>{item.name}</span>
@@ -246,11 +254,10 @@ export default function Layout({ children }: LayoutProps) {
                       navigate(item.href);
                       trackNavigation(item.name, { href: item.href, section: 'admin-navigation' });
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-colors ${
-                      isCurrentPage(item.href)
-                        ? 'text-primary bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                    }`}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-colors ${isCurrentPage(item.href)
+                      ? 'text-primary bg-blue-50 dark:bg-blue-900/20'
+                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
+                      }`}
                   >
                     <Icon className="w-5 h-5" />
                     <span>{item.name}</span>
@@ -279,10 +286,7 @@ export default function Layout({ children }: LayoutProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                trackAction('logout', 'user', user?.id, { page: location });
-                logoutMutation.mutate();
-              }}
+              onClick={handleLogout}
               disabled={logoutMutation.isPending}
               className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
             >
@@ -356,7 +360,7 @@ export default function Layout({ children }: LayoutProps) {
                         </TabsTrigger>
                       )}
                     </TabsList>
-                    
+
                     <TabsContent value="profile" className="space-y-4">
                       <div className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
                         <Avatar className="w-16 h-16">
@@ -371,7 +375,7 @@ export default function Layout({ children }: LayoutProps) {
                           <p className="text-sm text-gray-500 dark:text-slate-500 capitalize">Role: {user?.role}</p>
                         </div>
                       </div>
-                      
+
                       <Form {...profileForm}>
                         <form onSubmit={profileForm.handleSubmit((data) => updateProfileMutation.mutate(data))} className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
@@ -417,7 +421,7 @@ export default function Layout({ children }: LayoutProps) {
                         </form>
                       </Form>
                     </TabsContent>
-                    
+
                     <TabsContent value="password" className="space-y-4">
                       <Form {...passwordForm}>
                         <form onSubmit={passwordForm.handleSubmit((data) => changePasswordMutation.mutate(data))} className="space-y-4">
@@ -475,7 +479,7 @@ export default function Layout({ children }: LayoutProps) {
                         </form>
                       </Form>
                     </TabsContent>
-                    
+
                     {isAdmin && (
                       <TabsContent value="administration" className="space-y-4">
                         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -484,7 +488,7 @@ export default function Layout({ children }: LayoutProps) {
                             Quick access to system administration features
                           </p>
                         </div>
-                        
+
                         <div className="grid grid-cols-1 gap-3">
                           {adminNavigation.map((item) => {
                             const Icon = item.icon;
@@ -525,7 +529,7 @@ export default function Layout({ children }: LayoutProps) {
       </div>
 
       {/* Forced Password Change Modal */}
-      <Dialog open={mustChangePassword} onOpenChange={() => {}}>
+      <Dialog open={mustChangePassword} onOpenChange={() => { }}>
         <DialogContent className="sm:max-w-[500px]" onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -546,11 +550,11 @@ export default function Layout({ children }: LayoutProps) {
                     <FormItem>
                       <FormLabel>Current Password (Temporary)</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="password" 
+                        <Input
+                          type="password"
                           placeholder="Enter your temporary password"
                           data-testid="input-current-password"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -564,11 +568,11 @@ export default function Layout({ children }: LayoutProps) {
                     <FormItem>
                       <FormLabel>New Password</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="password" 
+                        <Input
+                          type="password"
                           placeholder="Enter new password (min 6 characters)"
                           data-testid="input-new-password"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -582,19 +586,19 @@ export default function Layout({ children }: LayoutProps) {
                     <FormItem>
                       <FormLabel>Confirm New Password</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="password" 
+                        <Input
+                          type="password"
                           placeholder="Confirm new password"
                           data-testid="input-confirm-password"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full"
                   disabled={changePasswordMutation.isPending}
                   data-testid="button-change-password"

@@ -5,12 +5,15 @@ import { setupVite, serveStatic, log } from "./vite";
 process.env.TZ = 'Asia/Kolkata';
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  if (path.startsWith("/api")) {
+    log(`--> ${req.method} ${path}`);
+  }
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -24,7 +27,12 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        try {
+          const jsonStr = JSON.stringify(capturedJsonResponse);
+          logLine += ` :: ${jsonStr}`;
+        } catch (e) {
+          logLine += ` :: [Unserializable Response]`;
+        }
       }
 
       if (logLine.length > 80) {
@@ -44,13 +52,7 @@ app.use((req, res, next) => {
   
   startReminderService();
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
+  // Placeholder for error handler, will move to end after setupVite
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -60,6 +62,17 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
+
+  // Error handler MUST be after all routes and vite middleware
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+
+    res.status(status).json({ message });
+    if (app.get("env") === "development") {
+      console.error(err);
+    }
+  });
 
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.

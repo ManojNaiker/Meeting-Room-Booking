@@ -51,14 +51,14 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="mx-auto flex items-center justify-center">
-            <img 
-              src={lightLogo} 
-              alt="Light Finance Logo" 
+            <img
+              src={lightLogo}
+              alt="Light Finance Logo"
               className="h-16 w-auto object-contain"
             />
           </div>
         </div>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Meeting Room Booking</CardTitle>
@@ -74,7 +74,7 @@ export default function Login() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -139,22 +139,8 @@ export default function Login() {
                 type="button"
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={async () => {
-                  try {
-                    const response = await fetch("/api/auth/sso-config");
-                    if (response.ok) {
-                      const settings = await response.json();
-                      if (settings.enableSso && settings.samlEntryPoint) {
-                        window.location.href = "/api/auth/saml/login";
-                      } else {
-                        setError("SSO is not enabled or configured.");
-                      }
-                    } else {
-                      setError("Failed to check SSO settings.");
-                    }
-                  } catch (err) {
-                    setError("Error checking SSO settings.");
-                  }
+                onClick={() => {
+                  window.location.href = "/api/auth/saml/login";
                 }}
                 data-testid="button-sso-login"
               >
