@@ -203,6 +203,18 @@ export async function setupAuth(app: Express) {
     );
   });
 
+    app.get("/api/auth/saml/metadata", (req, res) => {
+      if (!emailSettings?.enableSso || !emailSettings?.samlEntryPoint) {
+        return res.status(400).json({ message: "SAML SSO is not configured or enabled." });
+      }
+      res.type("application/xml");
+      res.status(200).send(
+        samlStrategy.generateServiceProviderMetadata(emailSettings.samlCert || "")
+      );
+    });
+  } else {
+    app.get(["/api/auth/saml/login", "/api/auth/saml/metadata"], (req, res) => {
+      res.status(404).json({ message: "SAML SSO is not configured or enabled." });
   // SAML Logout routes
   app.get("/api/auth/saml/logout", async (req: any, res) => {
     const strategy = await configureSamlStrategy(req);
@@ -228,7 +240,6 @@ export async function setupAuth(app: Express) {
     res.json({ status: "ok", time: new Date().toISOString() });
   });
 
-  // Custom login endpoint
   app.post('/api/auth/login', async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -237,33 +248,28 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email and password are required" });
       }
 
-      // Find user by email
       const user = await storage.getUserByEmail(email);
       if (!user) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Check password
       const isValid = await bcrypt.compare(password, user.passwordHash || "");
       if (!isValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Check if user is activated (except for admin users created before activation system)
       if (user.isActivated === false && user.role !== 'admin') {
         return res.status(403).json({ 
           message: "Please activate your account using the link sent to your email before logging in" 
         });
       }
 
-      // Create session
       (req.session as any).user = {
         id: user.id,
         email: user.email,
         role: user.role,
       };
 
-      // Log successful login
       await storage.createAuditLog({
         userId: user.id,
         action: 'login',
@@ -286,7 +292,6 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Logout endpoint
   app.post('/api/auth/logout', (req, res) => {
     req.session.destroy((err) => {
       if (err) {
@@ -295,10 +300,6 @@ export async function setupAuth(app: Express) {
       res.json({ message: "Logged out successfully" });
     });
   });
-
-
-
-
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
@@ -308,7 +309,6 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Attach user to request for use in other routes
   req.user = user;
   next();
 };

@@ -139,8 +139,22 @@ export default function Login() {
                 type="button"
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={() => {
-                  window.location.href = "/api/auth/saml/login";
+                onClick={async () => {
+                  try {
+                    const response = await fetch("/api/auth/sso-config");
+                    if (response.ok) {
+                      const settings = await response.json();
+                      if (settings.enableSso && settings.samlEntryPoint) {
+                        window.location.href = "/api/auth/saml/login";
+                      } else {
+                        setError("SSO is not enabled or configured.");
+                      }
+                    } else {
+                      setError("Failed to check SSO settings.");
+                    }
+                  } catch (err) {
+                    setError("Error checking SSO settings.");
+                  }
                 }}
                 data-testid="button-sso-login"
               >

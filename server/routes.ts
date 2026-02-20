@@ -1166,6 +1166,19 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
     }
   });
 
+  // Public SSO config check (used by login page)
+  app.get('/api/auth/sso-config', async (req, res) => {
+    try {
+      const settings = await storage.getEmailSettings();
+      res.json({
+        enableSso: !!settings?.enableSso,
+        samlEntryPoint: settings?.samlEntryPoint || null
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch SSO config" });
+    }
+  });
+
   app.post('/api/email-settings', isAuthenticated, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.user.id);
