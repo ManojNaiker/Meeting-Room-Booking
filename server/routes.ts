@@ -208,6 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bookings = await storage.getAllBookings();
       const currentUserEmail = req.user.email;
       const currentUserId = req.user.id;
+      const user = await storage.getUser(currentUserId);
       
       const filteredBookings = bookings.map(booking => {
         const isOrganizer = booking.userId === currentUserId;
@@ -216,7 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email.toLowerCase().trim() === currentUserEmail.toLowerCase().trim()
         );
         
-        if (isOrganizer || isParticipant) {
+        if (isOrganizer || isParticipant || user?.role === 'admin') {
           return booking;
         } else {
           return {

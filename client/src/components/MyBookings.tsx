@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -75,13 +76,15 @@ export default function MyBookings() {
   }>>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  const { data: bookings = [], isLoading } = useQuery({
-    queryKey: ['/api/bookings/my'],
-    refetchOnMount: 'always',
-  });
-
   const { data: rooms = [] } = useQuery({
     queryKey: ['/api/rooms'],
+  });
+
+  const { user } = useAuth();
+
+  const { data: bookings = [], isLoading } = useQuery({
+    queryKey: [user?.role === 'admin' ? '/api/bookings' : '/api/bookings/my'],
+    refetchOnMount: 'always',
   });
 
   const form = useForm<EditBookingData>({
@@ -113,7 +116,7 @@ export default function MyBookings() {
         title: "Success",
         description: "Booking updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/bookings/my'] });
+      queryClient.invalidateQueries({ queryKey: [user?.role === 'admin' ? '/api/bookings' : '/api/bookings/my'] });
       setIsEditModalOpen(false);
       setEditingBooking(null);
     },
@@ -137,7 +140,7 @@ export default function MyBookings() {
         title: "Success",
         description: "Booking deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/bookings/my'] });
+      queryClient.invalidateQueries({ queryKey: [user?.role === 'admin' ? '/api/bookings' : '/api/bookings/my'] });
     },
     onError: (error) => {
       toast({
@@ -150,7 +153,7 @@ export default function MyBookings() {
 
   const filteredBookings = bookings.filter((booking: any) => {
     const matchesSearch = booking.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         booking.room.name.toLowerCase().includes(searchTerm.toLowerCase());
+                         (booking.room?.name || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
     const matchesRoom = roomFilter === "all" || booking.roomId.toString() === roomFilter;
     
@@ -317,10 +320,10 @@ export default function MyBookings() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Calendar className="w-5 h-5" />
-            <span>My Bookings</span>
+            <span>{user?.role === 'admin' ? 'All Bookings' : 'My Bookings'}</span>
           </CardTitle>
           <p className="text-gray-600 dark:text-slate-400">
-            Manage your current and upcoming bookings
+            {user?.role === 'admin' ? 'Manage all current and upcoming bookings' : 'Manage your current and upcoming bookings'}
           </p>
         </CardHeader>
         <CardContent>
@@ -384,84 +387,87 @@ export default function MyBookings() {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredBookings.map((booking: any) => (
-                <Card key={booking.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-3">
-                          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-                            {booking.title}
-                          </h3>
-                          <Badge className={getStatusColor(booking.status)}>
-                            {booking.status}
-                          </Badge>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-slate-400">
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="w-4 h-4" />
-                            <span>{booking.room.name} (Capacity: {booking.room.capacity})</span>
+              {filteredBookings.map((booking: any) => {
+                const isOwnerOrAdmin = booking.userId === user?.id || user?.role === 'admin';
+                return (
+                  <Card key={booking.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                              {booking.title}
+                            </h3>
+                            <Badge className={getStatusColor(booking.status)}>
+                              {booking.status}
+                            </Badge>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4" />
-                            <span>
-                              {format(new Date(booking.startDateTime), 'MMM dd, yyyy HH:mm')} - 
-                              {format(new Date(booking.endDateTime), 'HH:mm')}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4" />
-                            <span>
-                              Duration: {Math.round((new Date(booking.endDateTime).getTime() - new Date(booking.startDateTime).getTime()) / (1000 * 60 * 60))} hours
-                            </span>
-                          </div>
-                        </div>
-
-                        {booking.description && (
-                          <p className="mt-3 text-sm text-gray-600 dark:text-slate-400">
-                            {booking.description}
-                          </p>
-                        )}
-
-                        {booking.equipment && booking.equipment.length > 0 && (
-                          <div className="mt-3">
-                            <div className="flex flex-wrap gap-2">
-                              {booking.room.equipment.map((item: string, index: number) => (
-                                <Badge key={index} variant="secondary" className="text-xs">
-                                  {item}
-                                </Badge>
-                              ))}
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 dark:text-slate-400">
+                            <div className="flex items-center space-x-2">
+                              <MapPin className="w-4 h-4" />
+                              <span>{booking.room?.name || 'Unknown Room'} (Capacity: {booking.room?.capacity || 0})</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Clock className="w-4 h-4" />
+                              <span>
+                                {format(new Date(booking.startDateTime), 'MMM dd, yyyy HH:mm')} - 
+                                {format(new Date(booking.endDateTime), 'HH:mm')}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Calendar className="w-4 h-4" />
+                              <span>
+                                Duration: {Math.round((new Date(booking.endDateTime).getTime() - new Date(booking.startDateTime).getTime()) / (1000 * 60 * 60))} hours
+                              </span>
                             </div>
                           </div>
-                        )}
-                      </div>
 
-                      <div className="flex items-center space-x-2 ml-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={booking.status === 'cancelled'}
-                          onClick={() => handleEditBooking(booking)}
-                        >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteBooking(booking.id)}
-                          disabled={deleteBookingMutation.isPending}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button>
+                          {booking.description && (
+                            <p className="mt-3 text-sm text-gray-600 dark:text-slate-400">
+                              {booking.description}
+                            </p>
+                          )}
+
+                          {booking.room?.equipment && booking.room.equipment.length > 0 && (
+                            <div className="mt-3">
+                              <div className="flex flex-wrap gap-2">
+                                {booking.room.equipment.map((item: string, index: number) => (
+                                  <Badge key={index} variant="secondary" className="text-xs">
+                                    {item}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-2 ml-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={booking.status === 'cancelled'}
+                            onClick={() => handleEditBooking(booking)}
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteBooking(booking.id)}
+                            disabled={deleteBookingMutation.isPending}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </CardContent>

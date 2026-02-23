@@ -340,7 +340,8 @@ export default function CalendarView() {
 
   const handleEditBooking = async (booking: Booking) => {
     const user = currentUser as any;
-    if (!user || booking.userId !== user.id) {
+    const isAdmin = user?.role === 'admin';
+    if (!user || (booking.userId !== user.id && !isAdmin)) {
       toast({
         title: "Unauthorized",
         description: "You can only edit your own bookings",
@@ -402,7 +403,7 @@ export default function CalendarView() {
     if (!currentUser) return false;
     
     const user = currentUser as any;
-    if (booking.userId === user.id) return true;
+    if (user.role === 'admin' || booking.userId === user.id) return true;
     
     if (booking.participants && Array.isArray(booking.participants)) {
       const userEmail = (user.email || '').toLowerCase().trim();
