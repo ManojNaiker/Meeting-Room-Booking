@@ -36,19 +36,21 @@ function Router() {
 
   return (
     <Switch>
-      {!isAuthenticated ? (
-        <>
-          <Route path="/" component={Login} />
-          <Route path="/login" component={Login} />
-          <Route path="/forgot-password" component={ForgotPassword} />
-          <Route path="/reset-password" component={ResetPassword} />
-        </>
-      ) : (
-        <Route path="/" component={Home} />
-      )}
+      <Route path="/login" component={Login} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
 
-      {isAuthenticated && (
+      {!isAuthenticated ? (
+        <Route path="/:rest*">
+          {(params) => {
+            // If it's the root path and not authenticated, show login
+            // For any other path, redirect to login
+            return <Login />;
+          }}
+        </Route>
+      ) : (
         <>
+          <Route path="/" component={Home} />
           <Route path="/dashboard">
             <Layout>
               <Dashboard />
@@ -99,10 +101,9 @@ function Router() {
               <AuditLog />
             </Layout>
           </Route>
+          <Route component={NotFound} />
         </>
       )}
-
-      <Route component={NotFound} />
     </Switch>
   );
 }
