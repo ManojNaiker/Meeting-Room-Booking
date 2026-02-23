@@ -76,15 +76,15 @@ export default function MyBookings() {
   }>>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  const { data: rooms = [] } = useQuery({
-    queryKey: ['/api/rooms'],
-  });
-
   const { user } = useAuth();
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: [user?.role === 'admin' ? '/api/bookings' : '/api/bookings/my'],
     refetchOnMount: 'always',
+  });
+
+  const { data: rooms = [] } = useQuery({
+    queryKey: ['/api/rooms'],
   });
 
   const form = useForm<EditBookingData>({
