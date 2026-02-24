@@ -31,14 +31,13 @@ NODE_ENV=development
    npm run db:push
    ```
 
-3. **Seed Initial Data (Optional)**
-   If you want to create a default admin user and some rooms:
-   ```bash
-   # You can create a seed script or use the application's registration
-   # Default admin credentials in the system are:
-   # Email: admin@company.com
-   # Password: admin123
-   ```
+3. **SSO and LDAP Configuration**
+   The application supports SAML SSO (Skillmine) and LDAP for user authentication. These can be configured via the admin panel under "SSO Settings".
+   
+   **For local LDAP testing, ensure you have access to an LDAP server and set:**
+   - LDAP URL (e.g., `ldap://localhost:389`)
+   - Bind DN and Password
+   - Base DN for user searches
 
 4. **Start the Development Server**
    ```bash
