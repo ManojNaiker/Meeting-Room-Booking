@@ -37,6 +37,8 @@ import {
   Clock
 } from "lucide-react";
 import { format, addDays, subDays, isToday, startOfDay, endOfDay } from "date-fns";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ParticipantSelector from "./ParticipantSelector";
 
 interface Room {
@@ -739,9 +741,28 @@ export default function CalendarView() {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="text-lg font-semibold">
-                  {format(currentDate, 'EEEE, MMMM d, yyyy')}
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="text-lg font-semibold px-4 py-2 h-auto"
+                      data-testid="button-date-picker"
+                    >
+                      <Calendar className="w-4 h-4 mr-2" />
+                      {format(currentDate, 'EEEE, MMMM d, yyyy')}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={currentDate}
+                      onSelect={(date) => {
+                        if (date) setCurrentDate(date);
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-gray-500" />
