@@ -26,7 +26,9 @@ import {
   User,
   Upload,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  KeyRound,
+  MailPlus
 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -144,6 +146,51 @@ export default function UserManagement() {
       toast({
         title: "Error",
         description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest(`/api/users/${id}/reset-password`, {
+        method: 'POST',
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: data.message || "Password reset successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resendActivationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest(`/api/users/${id}/resend-activation`, {
+        method: 'POST',
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: data.message || "Activation email sent successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send activation email",
         variant: "destructive",
       });
     },
@@ -770,7 +817,7 @@ export default function UserManagement() {
                         </Badge>
                       </td>
                       <td className="py-4 px-4">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
                           <Button
                             variant="outline"
                             size="sm"
@@ -792,6 +839,28 @@ export default function UserManagement() {
                           >
                             <Edit className="w-4 h-4 mr-2" />
                             Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resetPasswordMutation.mutate(user.id)}
+                            disabled={resetPasswordMutation.isPending}
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                            data-testid={`button-reset-password-${user.id}`}
+                          >
+                            <KeyRound className="w-4 h-4 mr-2" />
+                            Reset Password
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resendActivationMutation.mutate(user.id)}
+                            disabled={resendActivationMutation.isPending}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            data-testid={`button-resend-activation-${user.id}`}
+                          >
+                            <MailPlus className="w-4 h-4 mr-2" />
+                            Resend Activation
                           </Button>
                           <Button
                             variant="outline"

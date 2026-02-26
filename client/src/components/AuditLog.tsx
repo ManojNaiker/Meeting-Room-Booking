@@ -18,7 +18,8 @@ import {
   Trash2,
   Filter,
   Activity,
-  Eye
+  Eye,
+  Download
 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -67,6 +68,30 @@ export default function AuditLog() {
     const matchesResource = resourceFilter === "all" || log.resourceType === resourceFilter;
     return matchesAction && matchesResource;
   });
+
+  const exportToCSV = () => {
+    if (filteredLogs.length === 0) return;
+    const headers = ["Timestamp", "Action", "Resource", "Resource ID", "User", "Email", "Role", "Details"];
+    const rows = filteredLogs.map((log: any) => [
+      format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+      log.action,
+      log.resourceType,
+      log.resourceId || '',
+      `${log.userFirstName || ''} ${log.userLastName || ''}`.trim(),
+      log.userEmail || '',
+      log.userRole || '',
+      log.details ? JSON.stringify(log.details).replace(/"/g, '""') : '',
+    ]);
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit_log_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Exported", description: `${filteredLogs.length} audit log entries exported to CSV` });
+  };
 
   const getActionIcon = (action: string) => {
     switch (action) {
@@ -212,6 +237,15 @@ export default function AuditLog() {
                 <SelectItem value="500">500 entries</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              onClick={exportToCSV}
+              disabled={filteredLogs.length === 0}
+              data-testid="button-export-audit-log"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
           </div>
 
           {/* Audit Log Table */}

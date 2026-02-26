@@ -190,11 +190,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const id = parseInt(req.params.id);
+      const room = await storage.getRoom(id);
+      if (!room) {
+        return res.status(404).json({ message: "Room not found" });
+      }
       const success = await storage.deleteRoom(id);
       if (!success) {
         return res.status(404).json({ message: "Room not found" });
       }
-      await createAuditLog(req, 'delete', 'room', id.toString());
+      await createAuditLog(req, 'delete', 'room', id.toString(), {
+        roomName: room.name,
+        capacity: room.capacity,
+        description: room.description,
+        equipment: room.equipment,
+      });
       res.json({ message: "Room deleted successfully" });
     } catch (error) {
       console.error("Error deleting room:", error);
@@ -1000,27 +1009,6 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
 
   app.put('/api/users/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.id);
-      if (user?.role !== 'admin') {
-        return res.status(403).json({ message: "Admin access required" });
-      }
-      
-      const id = req.params.id;
-      const updates = req.body;
-      const updatedUser = await storage.updateUser(id, updates);
-      if (!updatedUser) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      await createAuditLog(req, 'update', 'user', id, updates);
-      res.json(updatedUser);
-    } catch (error) {
-      console.error("Error updating user:", error);
-      res.status(500).json({ message: "Failed to update user" });
-    }
-  });
-
-  app.put('/api/users/:id', isAuthenticated, async (req: any, res) => {
-    try {
       const currentUser = await storage.getUser(req.user.id);
       if (currentUser?.role !== 'admin') {
         return res.status(403).json({ message: "Admin access required" });
@@ -1032,6 +1020,8 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
       if (password) {
         const bcrypt = await import("bcrypt");
         updates.passwordHash = await bcrypt.hash(password, 10);
+        updates.mustChangePassword = false;
+        updates.isActivated = true;
       }
 
       const updatedUser = await storage.updateUser(id, updates);
@@ -1039,11 +1029,183 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
         return res.status(404).json({ message: "User not found" });
       }
 
-      await createAuditLog(req, 'update', 'user', id, updates);
+      await createAuditLog(req, 'update', 'user', id, { ...updates, passwordHash: undefined });
       res.json(updatedUser);
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.post('/api/users/:id/reset-password', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = req.params.id;
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const generatePassword = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+        let password = '';
+        for (let i = 0; i < 10; i++) {
+          password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return password;
+      };
+
+      const newPassword = generatePassword();
+      const bcrypt = await import("bcrypt");
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      await storage.updateUser(id, {
+        passwordHash,
+        mustChangePassword: true,
+        isActivated: true,
+      });
+
+      await createAuditLog(req, 'update', 'user', id, {
+        action: 'admin_reset_password',
+        email: targetUser.email,
+      });
+
+      try {
+        const emailSettings = await storage.getEmailSettings();
+        if (emailSettings && emailSettings.smtpHost) {
+          const transporter = nodemailer.createTransport({
+            host: emailSettings.smtpHost,
+            port: emailSettings.smtpPort || 587,
+            secure: emailSettings.smtpPort === 465,
+            auth: {
+              user: emailSettings.smtpUsername,
+              pass: emailSettings.smtpPassword,
+            },
+          });
+
+          const loginUrl = `${req.protocol}://${req.get('host')}/`;
+          const emailContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2563eb;">Password Reset - Room Booking System</h2>
+              <p>Hello ${targetUser.firstName} ${targetUser.lastName},</p>
+              <p>Your password has been reset by an administrator. Your new one-time password is:</p>
+              <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: center;">
+                <p style="font-size: 24px; font-weight: bold; color: #dc2626; margin: 0;">${newPassword}</p>
+              </div>
+              <p style="color: #ef4444; font-size: 14px;">
+                <strong>Important:</strong> Please use this one-time password to log in and change it immediately.
+              </p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${loginUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">Login to Application</a>
+              </div>
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+              <p style="color: #6b7280; font-size: 12px;">Room Booking System</p>
+            </div>
+          `;
+
+          await transporter.sendMail({
+            from: `"${emailSettings.fromName}" <${emailSettings.fromEmail}>`,
+            to: targetUser.email,
+            subject: 'Password Reset - Room Booking System',
+            html: emailContent,
+          });
+
+          res.json({ message: "Password reset successfully. New password sent via email." });
+        } else {
+          res.json({ message: "Password reset successfully. Email not configured - new password could not be sent." });
+        }
+      } catch (emailError) {
+        console.error('Error sending password reset email:', emailError);
+        res.json({ message: "Password reset successfully but email could not be sent." });
+      }
+    } catch (error) {
+      console.error("Error resetting user password:", error);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  app.post('/api/users/:id/resend-activation', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUser = await storage.getUser(req.user.id);
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const id = req.params.id;
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const crypto = await import("crypto");
+      const activationToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 3600000);
+
+      await storage.createPasswordResetToken({
+        userId: targetUser.id,
+        token: activationToken,
+        expiresAt,
+      });
+
+      await createAuditLog(req, 'update', 'user', id, {
+        action: 'admin_resend_activation',
+        email: targetUser.email,
+      });
+
+      try {
+        const emailSettings = await storage.getEmailSettings();
+        if (emailSettings && emailSettings.smtpHost) {
+          const transporter = nodemailer.createTransport({
+            host: emailSettings.smtpHost,
+            port: emailSettings.smtpPort || 587,
+            secure: emailSettings.smtpPort === 465,
+            auth: {
+              user: emailSettings.smtpUsername,
+              pass: emailSettings.smtpPassword,
+            },
+          });
+
+          const activationUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${activationToken}`;
+          const emailContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2563eb;">Account Activation - Room Booking System</h2>
+              <p>Hello ${targetUser.firstName} ${targetUser.lastName},</p>
+              <p>Your administrator has sent you a new activation link. Please click the button below to set your password:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${activationUrl}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">Set Your Password</a>
+              </div>
+              <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+              <p style="word-break: break-all; color: #666;">${activationUrl}</p>
+              <p style="color: #ef4444; font-size: 14px;">
+                <strong>Important:</strong> This activation link will expire in 24 hours.
+              </p>
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+              <p style="color: #6b7280; font-size: 12px;">Room Booking System</p>
+            </div>
+          `;
+
+          await transporter.sendMail({
+            from: `"${emailSettings.fromName}" <${emailSettings.fromEmail}>`,
+            to: targetUser.email,
+            subject: 'Account Activation - Room Booking System',
+            html: emailContent,
+          });
+
+          res.json({ message: "Activation link sent successfully." });
+        } else {
+          res.json({ message: "Email not configured - activation link could not be sent." });
+        }
+      } catch (emailError) {
+        console.error('Error sending activation email:', emailError);
+        res.json({ message: "Failed to send activation email." });
+      }
+    } catch (error) {
+      console.error("Error resending activation:", error);
+      res.status(500).json({ message: "Failed to resend activation" });
     }
   });
 

@@ -35,9 +35,11 @@ Default admin credentials: admin@company.com / admin123
     - **Booking System**: Create, edit, and manage reservations with real-time availability checks, conflict prevention, and quick booking directly from the calendar.
     - **Calendar Views**: Weekly and monthly displays with improved alignment, prominent scrollbars, and automatic scrolling to office hours.
     - **User Management**: Admin interface for user role management. User list endpoint (GET `/api/users`) is accessible to all authenticated users for participant selection.
-    - **Audit Logging**: Comprehensive system activity tracking with detailed modal views.
+    - **Audit Logging**: Comprehensive system activity tracking with detailed modal views and CSV export. Room deletions include room details (name, capacity, etc.) in the audit log.
     - **Email Functionality**: Integrated password reset, booking notifications, and reminders with configurable SMTP settings.
+    - **Admin User Actions**: Admin can reset user passwords (generates OTP sent via email) and resend activation links from the User Management page.
     - **Notifications**: Backend support for deleting all user notifications.
+    - **Email Case-Insensitivity**: All email addresses are normalized to lowercase for consistent login and lookup.
 
 ### Data Storage
 - **Primary Database**: PostgreSQL via Replit environment, managed with Drizzle ORM.
