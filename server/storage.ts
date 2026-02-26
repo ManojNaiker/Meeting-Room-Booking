@@ -100,14 +100,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    if (!email) return undefined;
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
     return user;
   }
 
   async createUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values({ ...userData, email: userData.email.toLowerCase() })
       .returning();
     return user;
   }
@@ -126,7 +127,7 @@ export class DatabaseStorage implements IStorage {
 
         const [user] = await db
           .insert(users)
-          .values(userData)
+          .values({ ...userData, email: userData.email.toLowerCase() })
           .returning();
         success.push(user);
       } catch (error: any) {
@@ -150,9 +151,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const normalizedUpdates = updates.email
+      ? { ...updates, email: updates.email.toLowerCase() }
+      : updates;
     const [user] = await db
       .update(users)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...normalizedUpdates, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
