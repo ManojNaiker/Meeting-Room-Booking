@@ -830,7 +830,7 @@ export default function CalendarView() {
         </CardHeader>
 
         <CardContent>
-          <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-y-auto scrollbar-visible max-h-[600px]">
+          <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-auto scrollbar-visible max-h-[600px]">
             <div className="flex relative">
               <div className="w-64 flex-shrink-0 bg-gray-50 dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 sticky left-0 z-10">
                 <div className="h-12 border-b border-gray-200 dark:border-slate-700 flex items-center px-4 font-semibold text-sm">
