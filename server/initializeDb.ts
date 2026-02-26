@@ -1,6 +1,8 @@
 import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { v4 as uuidv4 } from "uuid";
+import { db } from "./db";
+import { rooms } from "@shared/schema";
 
 export async function initializeDatabase() {
   try {
