@@ -31,7 +31,7 @@ Default admin credentials: admin@company.com / admin123
 - **API Design**: RESTful API with JSON responses, including server-side privacy enforcement for booking details.
 - **Core Features**:
     - **Authentication System**: Role-based access (admin, user, viewer) with secure password hashing.
-    - **Room Management**: CRUD operations for rooms (admin only), including automatic seeding of default rooms.
+    - **Room Management**: CRUD operations for rooms (admin only), including automatic seeding of default rooms. Supports Grid/List view toggle, column visibility chooser in list view, search filtering, bulk CSV upload (POST `/api/rooms/bulk`), and CSV export.
     - **Booking System**: Create, edit, and manage reservations with real-time availability checks, conflict prevention, and quick booking directly from the calendar.
     - **Calendar Views**: Weekly and monthly displays with improved alignment, prominent scrollbars, and automatic scrolling to office hours.
     - **User Management**: Admin interface for user role management. User list endpoint (GET `/api/users`) is accessible to all authenticated users for participant selection.

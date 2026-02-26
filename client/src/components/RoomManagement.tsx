@@ -33,8 +33,17 @@ import {
   Video, 
   Mic, 
   Camera, 
-  CloudUpload
+  CloudUpload,
+  LayoutGrid,
+  List,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Search,
+  Columns3
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -124,9 +133,42 @@ export default function RoomManagement() {
   const [roomImage, setRoomImage] = useState<File | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [bulkUploadResults, setBulkUploadResults] = useState<any>(null);
+
+  const allColumns = [
+    { key: "name", label: "Room Name", alwaysVisible: true },
+    { key: "capacity", label: "Capacity" },
+    { key: "description", label: "Description" },
+    { key: "equipment", label: "Equipment" },
+    { key: "status", label: "Status" },
+    { key: "actions", label: "Actions", alwaysVisible: true },
+  ];
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(
+    ["name", "capacity", "description", "equipment", "status", "actions"]
+  );
+  const toggleColumn = (key: string) => {
+    setVisibleColumns(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+  const isColumnVisible = (key: string) => visibleColumns.includes(key);
 
   const { data: rooms = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/rooms'],
+  });
+
+  const filteredRooms = rooms.filter((room: any) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      room.name?.toLowerCase().includes(term) ||
+      room.description?.toLowerCase().includes(term) ||
+      room.equipment?.some((e: string) => e.toLowerCase().includes(term))
+    );
   });
 
   const form = useForm<RoomFormData>({
@@ -261,6 +303,31 @@ export default function RoomManagement() {
     },
   });
 
+  const bulkUploadMutation = useMutation({
+    mutationFn: async (roomsData: any[]) => {
+      const response = await apiRequest('/api/rooms/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ rooms: roomsData }),
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Bulk Upload Completed",
+        description: `${data.success?.length || 0} rooms created, ${data.failed?.length || 0} failed`,
+      });
+      setBulkUploadResults(data);
+      queryClient.invalidateQueries({ queryKey: ['/api/rooms'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = async (data: RoomFormData) => {
     let imageUrl;
     if (roomImage) {
@@ -352,6 +419,99 @@ export default function RoomManagement() {
     return colors[equipmentId as keyof typeof colors] || 'bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-400';
   };
 
+  const handleExportCSV = () => {
+    if (!rooms.length) return;
+    const headers = ["name", "capacity", "description", "equipment"];
+    const csvRows = [headers.join(",")];
+    rooms.forEach((room: any) => {
+      const equipmentStr = (room.equipment || []).join(", ");
+      csvRows.push([
+        `"${(room.name || '').replace(/"/g, '""')}"`,
+        room.capacity,
+        `"${(room.description || '').replace(/"/g, '""')}"`,
+        `"${equipmentStr}"`,
+      ].join(","));
+    });
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `rooms_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export Complete", description: `Exported ${rooms.length} rooms to CSV` });
+  };
+
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (inQuotes) {
+        if (char === '"' && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else if (char === '"') {
+          inQuotes = false;
+        } else {
+          current += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ',') {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const handleBulkUpload = () => {
+    if (!uploadFile) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split("\n").filter(l => l.trim());
+        if (lines.length < 2) {
+          toast({ title: "Error", description: "CSV must have a header row and at least one data row", variant: "destructive" });
+          return;
+        }
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+        const nameIdx = headers.indexOf("name");
+        const capacityIdx = headers.indexOf("capacity");
+        const descIdx = headers.indexOf("description");
+        const equipIdx = headers.indexOf("equipment");
+
+        if (nameIdx === -1 || capacityIdx === -1) {
+          toast({ title: "Error", description: "CSV must have 'name' and 'capacity' columns", variant: "destructive" });
+          return;
+        }
+
+        const roomsToCreate = lines.slice(1).map(line => {
+          const cols = parseCSVLine(line);
+          return {
+            name: cols[nameIdx] || "",
+            capacity: cols[capacityIdx] || "",
+            description: descIdx !== -1 ? (cols[descIdx] || "") : "",
+            equipment: equipIdx !== -1 ? (cols[equipIdx] || "") : "",
+          };
+        }).filter(r => r.name);
+
+        bulkUploadMutation.mutate(roomsToCreate);
+      } catch (err) {
+        toast({ title: "Error", description: "Failed to parse CSV file", variant: "destructive" });
+      }
+    };
+    reader.readAsText(uploadFile);
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -371,11 +531,122 @@ export default function RoomManagement() {
     );
   }
 
+  const renderRoomForm = (onSubmitHandler: (data: RoomFormData) => void, isEdit: boolean) => (
+    <form onSubmit={form.handleSubmit(onSubmitHandler)} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <Label htmlFor={isEdit ? "edit-name" : "name"}>Room Name *</Label>
+          <Input
+            id={isEdit ? "edit-name" : "name"}
+            placeholder="Enter room name"
+            {...form.register('name')}
+          />
+          {form.formState.errors.name && (
+            <p className="text-sm text-red-600">{form.formState.errors.name.message}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={isEdit ? "edit-capacity" : "capacity"}>Capacity *</Label>
+          <Input
+            id={isEdit ? "edit-capacity" : "capacity"}
+            type="number"
+            placeholder="Number of people"
+            {...form.register('capacity', { valueAsNumber: true })}
+          />
+          {form.formState.errors.capacity && (
+            <p className="text-sm text-red-600">{form.formState.errors.capacity.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={isEdit ? "edit-description" : "description"}>Description</Label>
+        <Textarea
+          id={isEdit ? "edit-description" : "description"}
+          placeholder="Room description..."
+          {...form.register('description')}
+        />
+      </div>
+
+      {!isEdit && (
+        <div className="space-y-2">
+          <Label>Room Image</Label>
+          <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-primary transition-colors">
+            <input
+              type="file"
+              className="hidden"
+              id="room-image"
+              accept="image/*"
+              onChange={handleImageChange}
+            />
+            <label htmlFor="room-image" className="cursor-pointer">
+              <CloudUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-sm text-gray-600 dark:text-slate-400">Upload room image</p>
+            </label>
+            {roomImage && (
+              <p className="text-sm text-green-600 mt-2">
+                Selected: {roomImage.name}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Equipment Checklist</Label>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {equipmentOptions.map((equipment) => (
+            <div key={equipment.id} className="flex items-center space-x-2">
+              <Checkbox
+                id={isEdit ? `edit-${equipment.id}` : equipment.id}
+                checked={form.watch('equipment')?.includes(equipment.id)}
+                onCheckedChange={(checked) => {
+                  const currentEquipment = form.watch('equipment') || [];
+                  if (checked) {
+                    form.setValue('equipment', [...currentEquipment, equipment.id]);
+                  } else {
+                    form.setValue('equipment', currentEquipment.filter(id => id !== equipment.id));
+                  }
+                }}
+              />
+              <Label htmlFor={isEdit ? `edit-${equipment.id}` : equipment.id} className="text-sm">
+                {equipment.label}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-4 border-t pt-4">
+        <div className="flex items-center space-x-2">
+          <UsersIcon className="w-5 h-5 text-primary" />
+          <Label className="text-base font-semibold">Restrict Access</Label>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Select specific users who are allowed to book this room. If none are selected, anyone can book.
+        </p>
+        <UserSelectionField form={form} name="restrictedUsers" />
+      </div>
+
+      <div className="flex justify-end space-x-4">
+        <Button type="button" variant="outline" onClick={() => isEdit ? setEditingRoom(null) : setIsCreateModalOpen(false)}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isEdit ? updateRoomMutation.isPending : createRoomMutation.isPending}>
+          {isEdit
+            ? (updateRoomMutation.isPending ? 'Updating...' : 'Update Room')
+            : (createRoomMutation.isPending ? 'Creating...' : 'Create Room')
+          }
+        </Button>
+      </div>
+    </form>
+  );
+
   return (
     <div className="p-6 space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <CardTitle className="flex items-center space-x-2">
                 <DoorOpen className="w-5 h-5" />
@@ -385,133 +656,187 @@ export default function RoomManagement() {
                 Manage meeting rooms and their equipment
               </p>
             </div>
-            <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Room
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Add New Room</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Room Name *</Label>
-                      <Input
-                        id="name"
-                        placeholder="Enter room name"
-                        {...form.register('name')}
-                      />
-                      {form.formState.errors.name && (
-                        <p className="text-sm text-red-600">{form.formState.errors.name.message}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="capacity">Capacity *</Label>
-                      <Input
-                        id="capacity"
-                        type="number"
-                        placeholder="Number of people"
-                        {...form.register('capacity', { valueAsNumber: true })}
-                      />
-                      {form.formState.errors.capacity && (
-                        <p className="text-sm text-red-600">{form.formState.errors.capacity.message}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Room description..."
-                      {...form.register('description')}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Room Image</Label>
-                    <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg p-6 text-center hover:border-primary transition-colors">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+              <Dialog open={isBulkUploadOpen} onOpenChange={(open) => {
+                setIsBulkUploadOpen(open);
+                if (!open) { setUploadFile(null); setBulkUploadResults(null); }
+              }}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" data-testid="button-bulk-upload-rooms">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Bulk Upload
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Bulk Upload Rooms</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
+                      Upload a CSV file with columns: <strong>name</strong>, <strong>capacity</strong>, description, equipment (comma-separated within quotes).
+                    </p>
+                    <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg p-6 text-center">
                       <input
                         type="file"
                         className="hidden"
-                        id="room-image"
-                        accept="image/*"
-                        onChange={handleImageChange}
+                        id="bulk-room-upload"
+                        accept=".csv"
+                        onChange={(e) => {
+                          setUploadFile(e.target.files?.[0] || null);
+                          setBulkUploadResults(null);
+                        }}
                       />
-                      <label htmlFor="room-image" className="cursor-pointer">
-                        <CloudUpload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-sm text-gray-600 dark:text-slate-400">Upload room image</p>
-                      </label>
-                      {roomImage && (
-                        <p className="text-sm text-green-600 mt-2">
-                          Selected: {roomImage.name}
+                      <label htmlFor="bulk-room-upload" className="cursor-pointer">
+                        <FileSpreadsheet className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600 dark:text-slate-400">
+                          {uploadFile ? uploadFile.name : "Click to select CSV file"}
                         </p>
-                      )}
+                      </label>
+                    </div>
+                    {bulkUploadResults && (
+                      <div className="space-y-2 text-sm">
+                        <p className="text-green-600">
+                          {bulkUploadResults.success?.length || 0} rooms created successfully
+                        </p>
+                        {bulkUploadResults.failed?.length > 0 && (
+                          <div className="text-red-600">
+                            <p>{bulkUploadResults.failed.length} rooms failed:</p>
+                            <ul className="list-disc pl-5 mt-1">
+                              {bulkUploadResults.failed.map((fail: any, idx: number) => (
+                                <li key={idx}>{fail.name}: {fail.reason}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="outline" onClick={() => setIsBulkUploadOpen(false)}>
+                        Close
+                      </Button>
+                      <Button
+                        onClick={handleBulkUpload}
+                        disabled={!uploadFile || bulkUploadMutation.isPending}
+                        data-testid="button-submit-bulk-upload-rooms"
+                      >
+                        {bulkUploadMutation.isPending ? "Uploading..." : "Upload"}
+                      </Button>
                     </div>
                   </div>
+                </DialogContent>
+              </Dialog>
 
-                  <div className="space-y-2">
-                    <Label>Equipment Checklist</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {equipmentOptions.map((equipment) => (
-                        <div key={equipment.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={equipment.id}
-                            onCheckedChange={(checked) => {
-                              const currentEquipment = form.watch('equipment') || [];
-                              if (checked) {
-                                form.setValue('equipment', [...currentEquipment, equipment.id]);
-                              } else {
-                                form.setValue('equipment', currentEquipment.filter(id => id !== equipment.id));
-                              }
-                            }}
-                          />
-                          <Label htmlFor={equipment.id} className="text-sm">
-                            {equipment.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              <Button variant="outline" onClick={handleExportCSV} data-testid="button-export-rooms">
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
 
-                  <div className="space-y-4 border-t pt-4">
-                    <div className="flex items-center space-x-2">
-                      <UsersIcon className="w-5 h-5 text-primary" />
-                      <Label className="text-base font-semibold">Restrict Access</Label>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Select specific users who are allowed to book this room. If none are selected, anyone can book.
-                    </p>
-                    <UserSelectionField form={form} name="restrictedUsers" />
-                  </div>
-
-                  <div className="flex justify-end space-x-4">
-                    <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={createRoomMutation.isPending}>
-                      {createRoomMutation.isPending ? 'Creating...' : 'Create Room'}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+              <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-add-room">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Room
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Add New Room</DialogTitle>
+                  </DialogHeader>
+                  {renderRoomForm(onSubmit, false)}
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          {rooms.length === 0 ? (
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search rooms..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-rooms"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              {viewMode === "list" && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" data-testid="button-column-chooser-rooms">
+                      <Columns3 className="w-4 h-4 mr-2" />
+                      Columns
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56" align="end">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium mb-2">Toggle Columns</p>
+                      {allColumns.map(col => (
+                        <label
+                          key={col.key}
+                          className={`flex items-center space-x-2 py-1.5 px-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer ${col.alwaysVisible ? "opacity-50" : ""}`}
+                        >
+                          <Checkbox
+                            checked={isColumnVisible(col.key)}
+                            onCheckedChange={() => !col.alwaysVisible && toggleColumn(col.key)}
+                            disabled={col.alwaysVisible}
+                          />
+                          <span className="text-sm">{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <TooltipProvider delayDuration={200}>
+                <div className="flex border rounded-md">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={viewMode === "grid" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setViewMode("grid")}
+                        className="rounded-r-none"
+                        data-testid="button-view-grid"
+                        aria-label="Grid view"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Grid View</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={viewMode === "list" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setViewMode("list")}
+                        className="rounded-l-none"
+                        data-testid="button-view-list"
+                        aria-label="List view"
+                      >
+                        <List className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>List View</TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+            </div>
+          </div>
+
+          {filteredRooms.length === 0 ? (
             <div className="text-center py-8">
               <DoorOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-slate-400">No rooms found</p>
+              <p className="text-gray-500 dark:text-slate-400">
+                {searchTerm ? "No rooms match your search" : "No rooms found"}
+              </p>
             </div>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rooms.map((room: any) => (
-                <Card key={room.id} className="hover:shadow-md transition-shadow">
+              {filteredRooms.map((room: any) => (
+                <Card key={room.id} className="hover:shadow-md transition-shadow" data-testid={`card-room-${room.id}`}>
                   <CardContent className="p-6">
                     {room.imageUrl && (
                       <img 
@@ -553,124 +878,170 @@ export default function RoomManagement() {
                       <Badge className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400">
                         Available
                       </Badge>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(room)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(room.id)}
-                          disabled={deleteRoomMutation.isPending}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <TooltipProvider delayDuration={200}>
+                        <div className="flex space-x-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEdit(room)}
+                                aria-label="Edit"
+                                data-testid={`button-edit-room-${room.id}`}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                onClick={() => handleDelete(room.id)}
+                                disabled={deleteRoomMutation.isPending}
+                                aria-label="Delete"
+                                data-testid={`button-delete-room-${room.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-slate-700">
+                    {isColumnVisible("name") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Room Name</th>}
+                    {isColumnVisible("capacity") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Capacity</th>}
+                    {isColumnVisible("description") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Description</th>}
+                    {isColumnVisible("equipment") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Equipment</th>}
+                    {isColumnVisible("status") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Status</th>}
+                    {isColumnVisible("actions") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRooms.map((room: any) => (
+                    <tr key={room.id} className="border-b border-gray-100 dark:border-slate-800" data-testid={`row-room-${room.id}`}>
+                      {isColumnVisible("name") && (
+                        <td className="py-4 px-4">
+                          <div className="flex items-center">
+                            {room.imageUrl && (
+                              <img src={room.imageUrl} alt={room.name} className="w-10 h-10 rounded object-cover mr-3" />
+                            )}
+                            <div>
+                              <p className="font-medium text-gray-800 dark:text-white">{room.name}</p>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                      {isColumnVisible("capacity") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
+                          <div className="flex items-center">
+                            <UsersIcon className="w-4 h-4 mr-1" />
+                            {room.capacity}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnVisible("description") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400 max-w-xs truncate">
+                          {room.description || "—"}
+                        </td>
+                      )}
+                      {isColumnVisible("equipment") && (
+                        <td className="py-4 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {room.equipment && room.equipment.length > 0 ? (
+                              room.equipment.map((equipmentId: string, index: number) => {
+                                const Icon = getEquipmentIcon(equipmentId);
+                                return (
+                                  <Badge key={`${equipmentId}-${index}`} className={`text-xs ${getEquipmentColor(equipmentId)}`}>
+                                    <Icon className="w-3 h-3 mr-1" />
+                                    {getEquipmentLabel(equipmentId)}
+                                  </Badge>
+                                );
+                              })
+                            ) : (
+                              <span className="text-sm text-gray-400">—</span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnVisible("status") && (
+                        <td className="py-4 px-4">
+                          <Badge className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400">
+                            Available
+                          </Badge>
+                        </td>
+                      )}
+                      {isColumnVisible("actions") && (
+                        <td className="py-4 px-4">
+                          <TooltipProvider delayDuration={200}>
+                            <div className="flex items-center space-x-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleEdit(room)}
+                                    aria-label="Edit"
+                                    data-testid={`button-edit-room-${room.id}`}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    onClick={() => handleDelete(room.id)}
+                                    disabled={deleteRoomMutation.isPending}
+                                    aria-label="Delete"
+                                    data-testid={`button-delete-room-${room.id}`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Edit Room Dialog */}
       <Dialog open={!!editingRoom} onOpenChange={() => setEditingRoom(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Room</DialogTitle>
           </DialogHeader>
-          <form onSubmit={form.handleSubmit(handleUpdate)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Room Name *</Label>
-                <Input
-                  id="edit-name"
-                  placeholder="Enter room name"
-                  {...form.register('name')}
-                />
-                {form.formState.errors.name && (
-                  <p className="text-sm text-red-600">{form.formState.errors.name.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-capacity">Capacity *</Label>
-                <Input
-                  id="edit-capacity"
-                  type="number"
-                  placeholder="Number of people"
-                  {...form.register('capacity', { valueAsNumber: true })}
-                />
-                {form.formState.errors.capacity && (
-                  <p className="text-sm text-red-600">{form.formState.errors.capacity.message}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                placeholder="Room description..."
-                {...form.register('description')}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Equipment Checklist</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {equipmentOptions.map((equipment) => (
-                  <div key={equipment.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`edit-${equipment.id}`}
-                      checked={form.watch('equipment')?.includes(equipment.id)}
-                      onCheckedChange={(checked) => {
-                        const currentEquipment = form.watch('equipment') || [];
-                        if (checked) {
-                          form.setValue('equipment', [...currentEquipment, equipment.id]);
-                        } else {
-                          form.setValue('equipment', currentEquipment.filter(id => id !== equipment.id));
-                        }
-                      }}
-                    />
-                    <Label htmlFor={`edit-${equipment.id}`} className="text-sm">
-                      {equipment.label}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4 border-t pt-4">
-              <div className="flex items-center space-x-2">
-                <UsersIcon className="w-5 h-5 text-primary" />
-                <Label className="text-base font-semibold">Restrict Access</Label>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Select specific users who are allowed to book this room. If none are selected, anyone can book.
-              </p>
-              <UserSelectionField form={form} name="restrictedUsers" />
-            </div>
-
-            <div className="flex justify-end space-x-4">
-              <Button type="button" variant="outline" onClick={() => setEditingRoom(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateRoomMutation.isPending}>
-                {updateRoomMutation.isPending ? 'Updating...' : 'Update Room'}
-              </Button>
-            </div>
-          </form>
+          {renderRoomForm(handleUpdate, true)}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent data-testid="dialog-delete-room-confirmation">
           <AlertDialogHeader>

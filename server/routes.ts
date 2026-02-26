@@ -211,6 +211,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/rooms/bulk', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.id);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { rooms: roomsData } = req.body;
+
+      if (!Array.isArray(roomsData) || roomsData.length === 0) {
+        return res.status(400).json({ message: "Rooms array is required" });
+      }
+
+      const results = { success: [] as any[], failed: [] as any[] };
+
+      for (const roomData of roomsData) {
+        try {
+          const { name, capacity, description, equipment } = roomData;
+          if (!name || !capacity) {
+            results.failed.push({ name: name || 'Unknown', reason: 'Name and capacity are required' });
+            continue;
+          }
+
+          const parsedEquipment = equipment
+            ? (typeof equipment === 'string' ? equipment.split(',').map((e: string) => e.trim().toLowerCase()) : equipment)
+            : [];
+
+          const room = await storage.createRoom({
+            name,
+            capacity: parseInt(capacity),
+            description: description || null,
+            equipment: parsedEquipment,
+            isActive: true,
+            restrictedUsers: [],
+          });
+          results.success.push(room);
+          await createAuditLog(req, 'create', 'room', room.id.toString(), { name, capacity, bulkUpload: true });
+        } catch (err: any) {
+          results.failed.push({ name: roomData.name || 'Unknown', reason: err.message });
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error bulk creating rooms:", error);
+      res.status(500).json({ message: "Failed to bulk create rooms" });
+    }
+  });
+
   // Booking routes
   app.get('/api/bookings', isAuthenticated, async (req: any, res) => {
     try {
