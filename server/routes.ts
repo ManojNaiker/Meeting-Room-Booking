@@ -1516,18 +1516,24 @@ EMP003,bob.jones@company.com,Bob,Jones,Analyst,Finance,user`;
 
   app.put('/api/auth/profile', isAuthenticated, async (req: any, res) => {
     try {
-      const { firstName, lastName } = req.body;
+      const { firstName, lastName, employeeCode, designation, department } = req.body;
       
       if (!firstName || !lastName) {
         return res.status(400).json({ message: "First name and last name are required" });
       }
       
-      const updatedUser = await storage.updateUser(req.user.id, { firstName, lastName });
+      const updatedUser = await storage.updateUser(req.user.id, { 
+        firstName, 
+        lastName,
+        employeeCode,
+        designation,
+        department
+      });
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
       
-      await createAuditLog(req, 'update', 'user', req.user.id, { firstName, lastName });
+      await createAuditLog(req, 'update', 'user', req.user.id, { firstName, lastName, employeeCode, designation, department });
       
       // Remove password hash from response
       const { passwordHash: _, ...userResponse } = updatedUser;

@@ -44,6 +44,9 @@ import NotificationDropdown from "@/components/NotificationDropdown";
 const profileUpdateSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+  employeeCode: z.string().optional(),
+  designation: z.string().optional(),
+  department: z.string().optional(),
 });
 
 const passwordChangeSchema = z.object({
@@ -74,6 +77,9 @@ export default function Layout({ children }: LayoutProps) {
     defaultValues: {
       firstName: "",
       lastName: "",
+      employeeCode: "",
+      designation: "",
+      department: "",
     },
   });
 
@@ -83,6 +89,9 @@ export default function Layout({ children }: LayoutProps) {
       profileForm.reset({
         firstName: user.firstName || "",
         lastName: user.lastName || "",
+        employeeCode: user.employeeCode || "",
+        designation: user.designation || "",
+        department: user.department || "",
       });
     }
   }, [user, isProfileOpen, profileForm]);
@@ -168,6 +177,23 @@ export default function Layout({ children }: LayoutProps) {
 
   // Check if user must change password (for auto-generated passwords)
   const mustChangePassword = user?.mustChangePassword === true;
+
+  // Check if JIT user needs to update profile details
+  const isJitUserMissingDetails = React.useMemo(() => {
+    if (!user || user.authMethod !== 'saml') return false;
+    return !user.employeeCode || !user.designation || !user.department;
+  }, [user]);
+
+  // Open profile dialog automatically for JIT users missing details
+  React.useEffect(() => {
+    if (isJitUserMissingDetails && !isProfileOpen) {
+      setIsProfileOpen(true);
+      toast({
+        title: "Profile Update Required",
+        description: "Please provide your Employee Code, Designation, and Department.",
+      });
+    }
+  }, [isJitUserMissingDetails, toast]);
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -400,6 +426,47 @@ export default function Layout({ children }: LayoutProps) {
                                   <FormLabel>Last Name</FormLabel>
                                   <FormControl>
                                     <Input placeholder="Doe" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <FormField
+                            control={profileForm.control}
+                            name="employeeCode"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Employee Code</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="EMP001" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={profileForm.control}
+                              name="designation"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Designation</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="Software Engineer" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={profileForm.control}
+                              name="department"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Department</FormLabel>
+                                  <FormControl>
+                                    <Input placeholder="IT" {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
