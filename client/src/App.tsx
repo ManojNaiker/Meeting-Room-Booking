@@ -41,13 +41,14 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
 
       {!isAuthenticated ? (
-        <Route path="/:rest*">
-          {(params) => {
-            // If it's the root path and not authenticated, show login
-            // For any other path, redirect to login
-            return <Login />;
-          }}
-        </Route>
+        <>
+          <Route path="/">
+            <Login />
+          </Route>
+          <Route path="/:rest*">
+            <Login />
+          </Route>
+        </>
       ) : (
         <>
           <Route path="/" component={Home} />
