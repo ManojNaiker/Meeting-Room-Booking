@@ -28,8 +28,11 @@ import {
   Download,
   FileSpreadsheet,
   KeyRound,
-  MailPlus
+  MailPlus,
+  Columns3
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -60,6 +63,27 @@ export default function UserManagement() {
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const [autoGeneratePassword, setAutoGeneratePassword] = useState(false);
+
+  const allColumns = [
+    { key: "user", label: "User", alwaysVisible: true },
+    { key: "employeeCode", label: "Employee Code" },
+    { key: "designation", label: "Designation" },
+    { key: "department", label: "Department" },
+    { key: "role", label: "Role", alwaysVisible: true },
+    { key: "lastActive", label: "Last Active" },
+    { key: "createdAt", label: "Created" },
+    { key: "status", label: "Status" },
+    { key: "actions", label: "Actions", alwaysVisible: true },
+  ];
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(
+    ["user", "employeeCode", "role", "lastActive", "status", "actions"]
+  );
+  const toggleColumn = (key: string) => {
+    setVisibleColumns(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+  const isColumnVisible = (key: string) => visibleColumns.includes(key);
 
   const form = useForm<z.infer<typeof createUserSchema>>({
     resolver: zodResolver(createUserSchema),
@@ -746,6 +770,33 @@ export default function UserManagement() {
               <Filter className="w-4 h-4 mr-2" />
               Filter
             </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="button-column-chooser">
+                  <Columns3 className="w-4 h-4 mr-2" />
+                  Columns
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56" align="end">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium mb-2">Toggle Columns</p>
+                  {allColumns.map(col => (
+                    <label
+                      key={col.key}
+                      className={`flex items-center space-x-2 py-1.5 px-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800 cursor-pointer ${col.alwaysVisible ? "opacity-50" : ""}`}
+                    >
+                      <Checkbox
+                        checked={isColumnVisible(col.key)}
+                        onCheckedChange={() => !col.alwaysVisible && toggleColumn(col.key)}
+                        disabled={col.alwaysVisible}
+                        data-testid={`checkbox-column-${col.key}`}
+                      />
+                      <span className="text-sm">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Users Table */}
@@ -764,117 +815,175 @@ export default function UserManagement() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-slate-700">
-                    <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">User</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Role</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Last Active</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Actions</th>
+                    {isColumnVisible("user") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">User</th>}
+                    {isColumnVisible("employeeCode") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Emp. Code</th>}
+                    {isColumnVisible("designation") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Designation</th>}
+                    {isColumnVisible("department") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Department</th>}
+                    {isColumnVisible("role") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Role</th>}
+                    {isColumnVisible("lastActive") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Last Active</th>}
+                    {isColumnVisible("createdAt") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Created</th>}
+                    {isColumnVisible("status") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Status</th>}
+                    {isColumnVisible("actions") && <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-slate-400">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((user: any) => (
                     <tr key={user.id} className="border-b border-gray-100 dark:border-slate-800">
-                      <td className="py-4 px-4">
-                        <div className="flex items-center">
-                          <Avatar className="w-10 h-10 mr-3">
-                            <AvatarImage src={user.profileImageUrl} alt={user.firstName} />
-                            <AvatarFallback>
-                              {user.firstName?.[0]}{user.lastName?.[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-gray-800 dark:text-white">
-                              {user.firstName} {user.lastName}
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-slate-400">{user.email}</p>
+                      {isColumnVisible("user") && (
+                        <td className="py-4 px-4">
+                          <div className="flex items-center">
+                            <Avatar className="w-10 h-10 mr-3">
+                              <AvatarImage src={user.profileImageUrl} alt={user.firstName} />
+                              <AvatarFallback>
+                                {user.firstName?.[0]}{user.lastName?.[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-gray-800 dark:text-white">
+                                {user.firstName} {user.lastName}
+                              </p>
+                              <p className="text-sm text-gray-600 dark:text-slate-400">{user.email}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-2">
-                          {getRoleIcon(user.role)}
-                          <Select
-                            value={user.role}
-                            onValueChange={(newRole) => handleRoleChange(user.id, newRole)}
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="user">User</SelectItem>
-                              <SelectItem value="viewer">Viewer</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
-                        {user.updatedAt ? format(new Date(user.updatedAt), 'MMM dd, yyyy') : 'Never'}
-                      </td>
-                      <td className="py-4 px-4">
-                        <Badge className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400">
-                          Active
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={updateUserMutation.isPending}
-                            onClick={() => {
-                              setUserToEdit(user);
-                              editForm.reset({
-                                employeeCode: user.employeeCode || "",
-                                email: user.email,
-                                firstName: user.firstName || "",
-                                lastName: user.lastName || "",
-                                designation: user.designation || "",
-                                department: user.department || "",
-                                role: user.role,
-                                password: "",
-                                autoGeneratePassword: false,
-                              });
-                            }}
-                          >
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => resetPasswordMutation.mutate(user.id)}
-                            disabled={resetPasswordMutation.isPending}
-                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                            data-testid={`button-reset-password-${user.id}`}
-                          >
-                            <KeyRound className="w-4 h-4 mr-2" />
-                            Reset Password
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => resendActivationMutation.mutate(user.id)}
-                            disabled={resendActivationMutation.isPending}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                            data-testid={`button-resend-activation-${user.id}`}
-                          >
-                            <MailPlus className="w-4 h-4 mr-2" />
-                            Resend Activation
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteUser(user.id, `${user.firstName} ${user.lastName}`)}
-                            disabled={deleteUserMutation.isPending}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            data-testid={`button-delete-user-${user.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
+                        </td>
+                      )}
+                      {isColumnVisible("employeeCode") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
+                          {user.employeeCode || "—"}
+                        </td>
+                      )}
+                      {isColumnVisible("designation") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
+                          {user.designation || "—"}
+                        </td>
+                      )}
+                      {isColumnVisible("department") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
+                          {user.department || "—"}
+                        </td>
+                      )}
+                      {isColumnVisible("role") && (
+                        <td className="py-4 px-4">
+                          <div className="flex items-center space-x-2">
+                            {getRoleIcon(user.role)}
+                            <Select
+                              value={user.role}
+                              onValueChange={(newRole) => handleRoleChange(user.id, newRole)}
+                            >
+                              <SelectTrigger className="w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="user">User</SelectItem>
+                                <SelectItem value="viewer">Viewer</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </td>
+                      )}
+                      {isColumnVisible("lastActive") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
+                          {user.updatedAt ? format(new Date(user.updatedAt), 'MMM dd, yyyy') : 'Never'}
+                        </td>
+                      )}
+                      {isColumnVisible("createdAt") && (
+                        <td className="py-4 px-4 text-sm text-gray-600 dark:text-slate-400">
+                          {user.createdAt ? format(new Date(user.createdAt), 'MMM dd, yyyy') : '—'}
+                        </td>
+                      )}
+                      {isColumnVisible("status") && (
+                        <td className="py-4 px-4">
+                          <Badge className="bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400">
+                            Active
+                          </Badge>
+                        </td>
+                      )}
+                      {isColumnVisible("actions") && (
+                        <td className="py-4 px-4">
+                          <TooltipProvider delayDuration={200}>
+                            <div className="flex items-center space-x-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={updateUserMutation.isPending}
+                                    onClick={() => {
+                                      setUserToEdit(user);
+                                      editForm.reset({
+                                        employeeCode: user.employeeCode || "",
+                                        email: user.email,
+                                        firstName: user.firstName || "",
+                                        lastName: user.lastName || "",
+                                        designation: user.designation || "",
+                                        department: user.department || "",
+                                        role: user.role,
+                                        password: "",
+                                        autoGeneratePassword: false,
+                                      });
+                                    }}
+                                    data-testid={`button-edit-user-${user.id}`}
+                                    aria-label="Edit"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                                    onClick={() => resetPasswordMutation.mutate(user.id)}
+                                    disabled={resetPasswordMutation.isPending}
+                                    data-testid={`button-reset-password-${user.id}`}
+                                    aria-label="Reset Password"
+                                  >
+                                    <KeyRound className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Reset Password</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                    onClick={() => resendActivationMutation.mutate(user.id)}
+                                    disabled={resendActivationMutation.isPending}
+                                    data-testid={`button-resend-activation-${user.id}`}
+                                    aria-label="Resend Activation"
+                                  >
+                                    <MailPlus className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Resend Activation</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    onClick={() => handleDeleteUser(user.id, `${user.firstName} ${user.lastName}`)}
+                                    disabled={deleteUserMutation.isPending}
+                                    data-testid={`button-delete-user-${user.id}`}
+                                    aria-label="Delete"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
