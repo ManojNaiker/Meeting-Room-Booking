@@ -28,12 +28,12 @@ export async function initializeDatabase() {
       console.log("Admin user already exists");
     }
     
-    // Check if rooms already exist
-    const existingRooms = await storage.getAllRooms();
+    // Check if rooms already exist (including inactive ones)
+    const allRooms = await db.select().from(rooms);
     
-    // Only create rooms if none exist
-    if (existingRooms.length === 0) {
-      console.log("No rooms found, creating default rooms...");
+    // Only create default rooms if the table is completely empty
+    if (allRooms.length === 0) {
+      console.log("No rooms found in database, creating default rooms...");
     
     // Create new default rooms based on the provided list
     const defaultRooms = [

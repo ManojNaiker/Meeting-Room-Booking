@@ -38,7 +38,7 @@ export interface IStorage {
   deleteUser(id: string): Promise<boolean>;
   
   // Room operations
-  getAllRooms(): Promise<Room[]>;
+  getAllRooms(includeInactive?: boolean): Promise<Room[]>;
   getRoom(id: number): Promise<Room | undefined>;
   createRoom(room: InsertRoom): Promise<Room>;
   updateRoom(id: number, updates: Partial<Room>): Promise<Room | undefined>;
@@ -168,7 +168,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Room operations
-  async getAllRooms(): Promise<Room[]> {
+  async getAllRooms(includeInactive: boolean = false): Promise<Room[]> {
+    if (includeInactive) {
+      return await db.select().from(rooms).orderBy(asc(rooms.name));
+    }
     return await db.select().from(rooms).where(eq(rooms.isActive, true)).orderBy(asc(rooms.name));
   }
 
