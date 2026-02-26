@@ -93,11 +93,23 @@ export async function setupAuth(app: Express) {
 
                 console.log(`[SAML] User ${email} not found, creating new account (JIT enabled)...`);
                 const { v4: uuidv4 } = await import("uuid");
+                
+                let firstName = profile.firstName || profile.givenName;
+                let lastName = profile.lastName || profile.surname;
+                
+                if ((!firstName || firstName === "SSO") && email.includes(".")) {
+                  const parts = email.split("@")[0].split(".");
+                  if (parts.length >= 2) {
+                    firstName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+                    lastName = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+                  }
+                }
+
                 user = await storage.createUser({
                   id: uuidv4(),
                   email: email,
-                  firstName: profile.firstName || profile.givenName || "SSO",
-                  lastName: profile.lastName || profile.surname || "User",
+                  firstName: firstName || "SSO",
+                  lastName: lastName || "User",
                   role: "user",
                   passwordHash: "SSO_AUTH_ONLY",
                   isActivated: true,

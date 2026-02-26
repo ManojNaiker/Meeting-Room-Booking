@@ -57,19 +57,31 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-  const user = await storage.getUserByEmail(claims["email"]);
+  const email = claims["email"];
+  let firstName = claims["first_name"];
+  let lastName = claims["last_name"];
+
+  if ((!firstName || firstName === "SSO") && email && email.includes(".")) {
+    const parts = email.split("@")[0].split(".");
+    if (parts.length >= 2) {
+      firstName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+      lastName = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+    }
+  }
+
+  const user = await storage.getUserByEmail(email);
   if (user) {
     await storage.updateUser(user.id, {
-      firstName: claims["first_name"],
-      lastName: claims["last_name"],
+      firstName: firstName,
+      lastName: lastName,
       profileImageUrl: claims["profile_image_url"],
     });
   } else {
     await storage.createUser({
       id: claims["sub"],
-      email: claims["email"],
-      firstName: claims["first_name"],
-      lastName: claims["last_name"],
+      email: email,
+      firstName: firstName || "SSO",
+      lastName: lastName || "User",
       profileImageUrl: claims["profile_image_url"],
       passwordHash: "REPLIT_AUTH_ONLY",
       role: "user",
